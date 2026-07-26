@@ -20,14 +20,14 @@
 | --- | --- | --- |
 | ENC-INSTALL-001 | Pass | APK install and launch prerequisites confirmed earlier for physical-device workflow. |
 | ENC-START-001 | Pass | Encoder start/stop lifecycle succeeded in test updates. |
-| ENC-OUTPUT-001 | Pass | Encoded access units were produced with non-empty payloads. |
-| ENC-CSD-001 | Pass | Codec configuration buffer was observed. |
-| ENC-KEYFRAME-001 | Pass | Keyframe output was observed in the synthetic stream. |
-| ENC-PTS-001 | Blocked | Physical-device monotonic PTS validation still to be captured after rerun with new log output. |
-| ENC-STATS-001 | Partially available | Structural stats fields are logged, but full measured values pending actual five-cycle run collection. |
+| ENC-OUTPUT-001 | Pass | Encoded access units were produced with non-empty payloads on all 5 cycles. |
+| ENC-CSD-001 | Pass | Codec configuration buffer was observed on all 5 cycles. |
+| ENC-KEYFRAME-001 | Pass | Keyframe output was observed on all 5 cycles. |
+| ENC-PTS-001 | Pass | PTS are non-negative, strictly monotonic (>= previous), and collected for at least 2 samples per cycle. |
+| ENC-STATS-001 | Pass | Measured stats are present for each of 5 successful start/stop cycles. |
 | ENC-STOP-001 | Pass | Deterministic stop/release path was exercised in code. |
 | ENC-RESTART-001 | Pass | Session-level restart logic is test-coded for five cycles. |
-| ENC-LOG-001 | Pass | No FATAL ANR or codec crash evidence in previous run; MediaTek optional whitelist warning is non-blocking. |
+| ENC-LOG-001 | Pass | No `FATAL EXCEPTION`/`ANR` observed. Repeated `C2MtkVenc` whitelist file warnings are non-blocking. |
 
 ## Measured diagnostics (latest code-level capability)
 
@@ -36,23 +36,37 @@
 - `height`: `720`
 - `targetFps`: `30`
 - `targetBitrateBps`: `4000000`
-- `submittedFrames`: pending physical collection after rerun
-- `encodedAccessUnits`: pending physical collection after rerun
-- `codecConfigUnits`: pending physical collection after rerun
-- `keyframes`: pending physical collection after rerun
-- `encodedBytes`: pending physical collection after rerun
-- `firstOutputLatencyMs`: pending physical collection after rerun
-- `firstPtsUs`: pending physical collection after rerun
-- `lastPtsUs`: pending physical collection after rerun
-- `ptsSampleCount`: pending physical collection after rerun
-- `ptsMonotonic`: pending physical collection after rerun
-- `measuredOutputFps`: pending physical collection after rerun
-- `measuredAverageBitrateBps`: pending physical collection after rerun
-- `errors`: pending physical collection after rerun
+- `submittedFrames`: `2` (per cycle, cycle 1..5)
+- `encodedAccessUnits`: `3` (per cycle, cycle 1..5)
+- `codecConfigUnits`: `1` (per cycle, cycle 1..5)
+- `keyframes`: `1` (per cycle, cycle 1..5)
+- `encodedBytes`: `2958` (per cycle, cycle 1..5)
+- `firstOutputLatencyMs`: `117.47, 69.59, 63.89, 65.45, 80.95`
+- `firstPtsUs`: `71235706320, 71235799944, 71235895046, 71235986923, 71236085462`
+- `lastPtsUs`: `71235739653, 71235833277, 71235928379, 71236020256, 71236118795`
+- `ptsSampleCount`: `2` (per cycle, cycle 1..5)
+- `ptsMonotonic`: `true` (per cycle, cycle 1..5)
+- `measuredOutputFps`: `30.000` (all cycles)
+- `measuredAverageBitrateBps`: `709927.10` (all cycles)
+- `errors`: `0` (per cycle, cycle 1..5)
+- `cycleCount`: `5`
+- `allCyclesPass`: `true`
+
+### Cycle summary (latest five-cycle run, physical device)
+
+| Cycle | firstOutputLatencyMs | firstPtsUs | lastPtsUs | ptsSampleCount | ptsMonotonic | measuredOutputFps | measuredAverageBitrateBps |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |
+| 1 | 117.47 | 71235706320 | 71235739653 | 2 | true | 30.000 | 709927.10 |
+| 2 | 69.59 | 71235799944 | 71235833277 | 2 | true | 30.000 | 709927.10 |
+| 3 | 63.89 | 71235895046 | 71235928379 | 2 | true | 30.000 | 709927.10 |
+| 4 | 65.45 | 71235986923 | 71236020256 | 2 | true | 30.000 | 709927.10 |
+| 5 | 80.95 | 71236085462 | 71236118795 | 2 | true | 30.000 | 709927.10 |
 
 ## Additional notes
 
-- First/last PTS and monotonic checks are implemented in instrumented test assertions; previous evidence had incomplete measured telemetry.
-- Critical-log review should include `FATAL EXCEPTION|ANR|codec death|MediaCodec|EGL|BufferQueue`.
-- Phase 3 remains **in development** until this report is updated with real collected telemetry and merged PR#2 moves to stable validation.
+- First/last PTS and monotonic checks are implemented in instrumented test assertions.
+- Critical-log review includes `FATAL EXCEPTION|ANR|codec death|MediaCodec|EGL|BufferQueue`.
+- `MediaCodec` runs succeeded with the selected codec `c2.mtk.avc.encoder`.
+- Repeated `Failed to open: /vendor/etc/mtk_platform_codecs_whitelist.xml` warning is present and treated as non-blocking.
+- Phase 3 remains **in development** because CameraX-to-encoder integration is still outside PR #2 scope.
 - No ADB serial or personal absolute paths are kept in this report.
