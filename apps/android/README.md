@@ -65,3 +65,7 @@ cd apps/android
 - No desktop service or OBS plugin integration.
 - No audio capture.
 
+## Physical-device validation
+
+CI validates compilation and tests, but real-device behavior requires a separate protocol.
+Use the checklist in [Physical-device smoke test](../../docs/qa/android-camera-smoke-test.md) before moving to Phase 3.

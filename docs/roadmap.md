@@ -13,6 +13,12 @@
 - Scaffold CameraX capture pipeline.
 - Add camera device enumeration and front/rear camera selection.
 - Validate capture latency and frame rate behavior.
+- Complete physical-device smoke testing before marking this phase complete:
+  - APK install on real hardware
+  - launch and permission behavior checks
+  - preview and camera switching
+  - rotation and recreation checks
+- Add test report from `docs/qa/android-camera-smoke-test.md`.
 
 **Status: in development**
 
