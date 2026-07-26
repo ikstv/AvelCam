@@ -19,6 +19,19 @@ class H264NalUnitParser {
 
     private fun isAvccFormat(sample: ByteArray): Boolean {
         if (sample.size < 5) return false
+        if (sample.size >= 3 &&
+            sample[0] == 0.toByte() &&
+            sample[1] == 0.toByte() &&
+            sample[2] == 1.toByte()) {
+            return false
+        }
+        if (sample.size >= 4 &&
+            sample[0] == 0.toByte() &&
+            sample[1] == 0.toByte() &&
+            sample[2] == 0.toByte() &&
+            sample[3] == 1.toByte()) {
+            return false
+        }
         val payloadSize = u32ToInt(sample, 0)
         return payloadSize > 0 && sample.size >= payloadSize + 4
     }
