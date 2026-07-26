@@ -3,7 +3,7 @@
 ## Summary
 
 - Date: 2026-07-27
-- Tested commit: `0be92173246e6f3598a8c6db96326685d1be380f`
+- Tested commit: `64007ef73003cf35ad9b37ceb712edf04fd5d572`
 - PR: https://github.com/ikstv/AvelCam/pull/2
 - Device model: `22071212AG`
 - Android: `15`
