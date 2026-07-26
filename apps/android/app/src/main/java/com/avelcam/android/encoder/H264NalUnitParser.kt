@@ -18,9 +18,9 @@ class H264NalUnitParser {
     }
 
     private fun isAvccFormat(sample: ByteArray): Boolean {
-        if (sample.size < 4) return false
-        val maybeSize = u24ToInt(sample, 0)
-        return maybeSize > 0 && sample.size >= maybeSize + 4
+        if (sample.size < 5) return false
+        val payloadSize = u32ToInt(sample, 0)
+        return payloadSize > 0 && sample.size >= payloadSize + 4
     }
 
     private fun parseAvcc(sample: ByteArray): List<ByteArray> {
@@ -44,17 +44,16 @@ class H264NalUnitParser {
         val startCodes = mutableListOf<Int>()
         var i = 0
         while (i <= sample.size - 3) {
-            if (sample[i] == 0.toByte() && sample[i + 1] == 0.toByte()) {
-                if (sample[i + 2] == 1.toByte()) {
-                    startCodes.add(i)
-                    i += 3
-                    continue
-                }
-                if (i + 3 < sample.size && sample[i + 2] == 0.toByte() && sample[i + 3] == 1.toByte()) {
-                    startCodes.add(i)
-                    i += 4
-                    continue
-                }
+            val isThreeByte = sample[i] == 0.toByte() && sample[i + 1] == 0.toByte() && sample[i + 2] == 1.toByte()
+            val isFourByte = i + 3 < sample.size &&
+                sample[i] == 0.toByte() &&
+                sample[i + 1] == 0.toByte() &&
+                sample[i + 2] == 0.toByte() &&
+                sample[i + 3] == 1.toByte()
+            if (isThreeByte || isFourByte) {
+                startCodes.add(i)
+                i += if (isFourByte) 4 else 3
+                continue
             }
             i++
         }
@@ -62,8 +61,11 @@ class H264NalUnitParser {
 
         for (idx in startCodes.indices) {
             val start = startCodes[idx]
-            val startLength = if (sample.size > start + 3 &&
-                sample[start] == 0.toByte() && sample[start + 1] == 0.toByte() && sample[start + 2] == 0.toByte()
+            val startLength = if (start + 3 < sample.size &&
+                sample[start] == 0.toByte() &&
+                sample[start + 1] == 0.toByte() &&
+                sample[start + 2] == 0.toByte() &&
+                sample[start + 3] == 1.toByte()
             ) 4 else 3
             val end = if (idx + 1 < startCodes.size) startCodes[idx + 1] else sample.size
             val nalStart = start + startLength
