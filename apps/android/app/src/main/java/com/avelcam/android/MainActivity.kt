@@ -49,6 +49,7 @@ import com.avelcam.android.camera.CameraPreview
 import com.avelcam.android.encoder.diagnostic.EncoderDiagnosticPanel
 import com.avelcam.android.ui.theme.AvelCamTheme
 import com.avelcam.android.ui.theme.Dark
+import com.avelcam.android.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update

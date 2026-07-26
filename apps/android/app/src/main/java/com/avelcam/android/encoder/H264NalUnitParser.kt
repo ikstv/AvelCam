@@ -4,7 +4,7 @@ class H264NalUnitParser {
     fun detectTypes(sample: ByteArray): Set<Int> {
         if (sample.isEmpty()) return emptySet()
         return extractNalUnits(sample).map { unit ->
-            unit.firstOrNull()?.let { (it and 0x1F).toInt() } ?: -1
+            unit.firstOrNull()?.let { it.toInt() and 0x1F } ?: -1
         }.filter { it in 1..31 }.toSet()
     }
 
@@ -89,4 +89,3 @@ class H264NalUnitParser {
             (data[offset + 3].toInt() and 0xFF)
     }
 }
-

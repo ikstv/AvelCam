@@ -135,7 +135,7 @@ class H264Encoder(
             setInteger(MediaFormat.KEY_BIT_RATE, config.bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, config.frameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, config.iFrameIntervalSeconds)
-            setInteger(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, config.repeatPreviousFrameAfterUs)
+            setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, config.repeatPreviousFrameAfterUs)
         }
         if (selection.supportedProfiles.contains(config.profile)) {
             format.setInteger(MediaFormat.KEY_PROFILE, config.profile)

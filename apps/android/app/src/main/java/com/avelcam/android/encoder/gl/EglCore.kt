@@ -7,14 +7,14 @@ import android.opengl.EGLConfig
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.view.Surface
-import java.nio.IntBuffer
+import java.util.Arrays
 
 class EglCore {
     private val eglDisplay: EGLDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
     private val config: EGLConfig
     private val eglContext: android.opengl.EGLContext
-    private val majorMinor = IntBuffer.allocate(2)
-    private val nConfigs = IntBuffer.allocate(1)
+    private val version = IntArray(2)
+    private val nConfigs = IntArray(1)
 
     init {
         val configAttribs = intArrayOf(
@@ -26,7 +26,7 @@ class EglCore {
             EGL14.EGL_NONE
         )
         val configs = arrayOfNulls<EGLConfig>(1)
-        EGL14.eglInitialize(eglDisplay, majorMinor, 0, majorMinor, 1)
+        EGL14.eglInitialize(eglDisplay, version, 0, version, 1)
         EGL14.eglChooseConfig(
             eglDisplay,
             configAttribs,
@@ -37,6 +37,9 @@ class EglCore {
             nConfigs,
             0
         )
+        if (nConfigs[0] != 1 || configs[0] == null) {
+            throw IllegalStateException("Expected one EGL config, got ${Arrays.toString(nConfigs)}.")
+        }
         config = configs[0] ?: throw IllegalStateException("Failed to choose EGL config.")
 
         val ctxAttribs = intArrayOf(

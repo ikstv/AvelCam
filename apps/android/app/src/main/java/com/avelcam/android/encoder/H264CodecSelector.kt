@@ -31,13 +31,14 @@ class H264CodecSelector {
             val caps = info.getCapabilitiesForType(config.mimeType)
             val videoCaps = caps.videoCapabilities ?: continue
             if (!videoCaps.isSizeSupported(config.width, config.height)) continue
-            if (!videoCaps.isFeatureSupported(MediaCodecInfo.VideoCapabilities.FEATURE_AdaptivePlayback)) {
+            if (!caps.isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_AdaptivePlayback)) {
                 // optional check; ignore when unsupported
             }
             val supportsSurface = caps.colorFormats.contains(config.colorFormat)
             if (!supportsSurface) continue
-            if (config.frameRate > 0 && !videoCaps.areFrameRatesSupported(
-                    config.frameRate.toDouble(),
+            if (config.frameRate > 0 && !videoCaps.areSizeAndRateSupported(
+                    config.width,
+                    config.height,
                     config.frameRate.toDouble()
                 )
             ) {
@@ -106,4 +107,3 @@ class H264CodecSelector {
         return profiles.toList() to levels.toList()
     }
 }
-
