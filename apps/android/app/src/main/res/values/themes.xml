@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.AvelCam" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#0F1116</item>
+        <item name="android:windowTranslucentStatus">false</item>
+    </style>
+</resources>

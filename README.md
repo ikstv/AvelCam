@@ -15,55 +15,53 @@
 
 ## Огляд
 
-Мета AvelCam — дати змогу виводити камеру телефону в OBS Studio з максимально можливою затримкою, спочатку через USB, а потім через Wi‑Fi як резервний шлях. Спочатку зосереджуємося на стабільному MVP для Windows, після чого поступово розширюємо функціонал.
+Мета AvelCam — дати змогу виводити камеру телефону в OBS Studio з максимально низькою затримкою, спочатку через USB, а потім через Wi‑Fi як резервний шлях.
 
 ## Пріоритет підключення
 
-- **USB** — основний шлях (перший).
-- **Wi‑Fi** — резервний шлях (планується після стабільного USB-пайплайна).
+- **USB** — основний шлях.
+- **Wi‑Fi** — резервний шлях (планується після стабільного USB-пайплайну).
 
 ## Запланована архітектура
 
-- Android-додаток на Kotlin із CameraX для захоплення потоку камери.
-- Аппаратне H.264-кодування через MediaCodec.
-- Передача потоків через USB (MVP: через ADB).
-- Десктопний сервіс на Rust для прийому та декодування потоку.
-- Нативний плагін OBS Studio на C/C++ для інтеграції з джерелом.
-- Wi‑Fi підключення додасться пізніше.
+- Android-додаток на Kotlin із CameraX для локального захоплення кадрів камери.
+- Апаратне H.264-кодування через MediaCodec (планується на наступних етапах).
+- Локальна передача через USB/ADB (планується на наступних етапах).
+- Десктопний сервіс на Rust для прийому та декодування потоку (планується).
+- Нативний плагін OBS Studio на C/C++ (планується).
+- Підтримка Wi‑Fi буде додана після стабільного USB-потоку.
 
-## Обсяг початкового MVP
+## Початкова реалізація Android
 
-- Платформа: Android → Windows.
-- Інтеграція з OBS Studio через нативний source plugin.
-- Передача по USB через ADB.
-- Відео в H.264, 1280×720 @ 30 FPS.
-- Вибір передньої або задньої камери.
-- Автоперепідключення по USB.
-- На старті — лише відео (без аудіо).
+- Базовий Android проєкт на Kotlin + Jetpack Compose у `apps/android`.
+- Runtime запит дозволу на камеру.
+- Локальний live preview через CameraX.
+- Перемикання між front/rear камерами.
+- Стани: доступ дозволено, відмовлено, постійна відмова.
 
 ## Дорожня карта (високий рівень)
 
-1. Підготовка репозиторію.
-2. Попередній перегляд камери на Android.
-3. Nабір H.264 кодувальника.
-4. USB-стрімінг через ADB.
+1. Підготовка репозиторію — виконано.
+2. Android camera preview — в розробці (CameraX preview та перемикання камер).
+3. H.264 encoder.
+4. USB streaming через ADB.
 5. Десктопний приймач і декодер.
-6. Плагін джерела OBS.
-7. Підтримка аудіо.
-8. Резервне підключення через Wi‑Fi.
-9. Пряме USB-підключення без обов'язкового ADB.
+6. OBS source plugin.
+7. Аудіо підтримка.
+8. Wi‑Fi fallback.
+9. Прямий USB без обов'язкового ADB.
 10. Пакування, інсталяція та релізи.
 
 ## Структура репозиторію
 
-- `android/` — Android-додаток (захоплення відео та керування камерою).
-- `desktop/` — Rust-сервіс для прийому/декодування потоків.
-- `plugins/obs-avelcam/` — плагін OBS Studio.
-- `crates/protocol/` — спільний протокол між компонами.
-- `crates/transport-usb/` — транспортний рівень USB.
-- `crates/transport-wifi/` — транспортний рівень Wi‑Fi.
-- `crates/media-decoder/` — модулі декодування медіапотоків.
-- `docs/` — архітектурна та процесна документація.
+- `apps/android` — Android додаток (початкова preview-реалізація).
+- `apps/desktop` — Rust-сервіс для майбутнього десктопного прийому/декодування.
+- `plugins/obs-avelcam` — плагін OBS Studio.
+- `crates/protocol` — спільний протокол.
+- `crates/transport-usb` — USB transport (планується).
+- `crates/transport-wifi` — Wi‑Fi transport (планується).
+- `crates/media-decoder` — модулі декодування (планується).
+- `docs` — документація.
 
 ## Платформи
 
@@ -73,59 +71,57 @@
 
 ## Статус внесків
 
-Інструкції щодо внесків будуть додані пізніше.
+Інструкції для внесків буде додано пізніше.
 
 ## Ліцензія
 
-Ліцензія ще не обрана.
+Ліцензію ще не обрано.
 
 ## Попередження
 
-Проєкт перебуває на ранній стадії розробки та **не готовий до продакшн-використання**.
+Проєкт перебуває на ранній стадії розробки та **не готовий для продакшн-використання**.
 
-[Перейти до розділу English](#english)
+[Перейти до English](#english)
 
 ## English
 
 ## Project
 
-**AvelCam** is an open-source project that turns an Android phone into a low-latency camera source for OBS Studio, with USB used first and Wi‑Fi as a fallback.
+**AvelCam** is an open-source project that turns an Android phone into a low-latency camera source for OBS Studio, with USB prioritized first and Wi‑Fi as a fallback.
 
 **Status:** early development.
 
 ## Overview
 
-The goal of AvelCam is to provide a practical, low-latency camera source path into OBS Studio for Android devices, prioritizing a stable USB pipeline first and Wi‑Fi as a secondary path afterward.
+The goal of AvelCam is to provide a practical, low-latency camera path into OBS Studio, prioritizing a stable USB pipeline first and Wi‑Fi as a secondary path.
 
 ## Connection priority
 
 - **USB** — primary connection.
-- **Wi‑Fi** — fallback connection (after USB pipeline is stable).
+- **Wi‑Fi** — fallback connection (after the USB pipeline is stable).
 
 ## Planned architecture
 
-- Android app in Kotlin using CameraX for camera capture.
-- Hardware H.264 encoding through MediaCodec.
-- Transport over USB (MVP: via ADB).
-- Rust desktop service for receiving and decoding streams.
-- Native OBS Studio source plugin in C/C++.
-- Wi‑Fi support will be added after the USB path is stable.
+- Android app in Kotlin using CameraX for local capture.
+- Hardware H.264 encoding via MediaCodec (planned).
+- USB transport through ADB in a later stage.
+- Rust desktop service for receiving and decoding streams (planned).
+- Native OBS Studio source plugin in C/C++ (planned).
+- Wi‑Fi support planned after USB becomes stable.
 
-## Initial MVP scope
+## Android preview foundation
 
-- Android to Windows.
-- OBS Studio integration through a native source plugin.
-- USB connection via ADB.
-- H.264 video at 1280×720 and 30 FPS.
-- Front and rear camera selection.
-- Automatic USB reconnection.
-- Video only for the initial phase.
+- Kotlin + Jetpack Compose app under `apps/android`.
+- Runtime camera permission handling.
+- CameraX live preview.
+- Front and rear camera switching support.
+- Permission denied and permanently denied guidance states.
 
 ## High-level roadmap
 
-1. Repository foundation.
-2. Android camera preview.
-3. H.264 encoder implementation.
+1. Repository foundation — completed.
+2. Android camera preview — in development.
+3. H.264 encoder.
 4. USB streaming through ADB.
 5. Desktop receiver and decoder.
 6. OBS source plugin.
@@ -136,14 +132,14 @@ The goal of AvelCam is to provide a practical, low-latency camera source path in
 
 ## Repository structure
 
-- `android/` — Android app (capture and camera controls).
-- `desktop/` — Rust service for stream ingest and decode.
-- `plugins/obs-avelcam/` — OBS Studio plugin.
-- `crates/protocol/` — shared protocol definitions used across components.
-- `crates/transport-usb/` — USB transport implementation.
-- `crates/transport-wifi/` — Wi‑Fi transport implementation.
-- `crates/media-decoder/` — media decoding modules.
-- `docs/` — architectural and planning documentation.
+- `android` — Android app for camera capture.
+- `desktop` — Rust service for future stream receive/decode.
+- `plugins/obs-avelcam` — OBS source plugin.
+- `crates/protocol` — shared protocol definitions.
+- `crates/transport-usb` — USB transport.
+- `crates/transport-wifi` — Wi‑Fi transport.
+- `crates/media-decoder` — media decoding modules.
+- `docs` — architectural and roadmap documentation.
 
 ## Supported platforms
 
@@ -162,3 +158,4 @@ No license has been selected yet.
 ## Disclaimer
 
 The project is in early development and **not ready for production use**.
+
