@@ -6,6 +6,46 @@ This protocol validates the Android Camera Foundation on a physical device befor
 Phase 3: H.264 encoding with MediaCodec. It verifies runtime behavior of CameraX preview
 on real hardware and confirms the baseline flow is stable for the next engineering stage.
 
+## 1a. One-screen execution checklist
+
+Use this short checklist for rapid physical-device smoke runs.
+
+```text
+Repository: ikstv/AvelCam
+Branch: feat/android-camera-foundation
+PR: #1
+Package: com.avelcam.android
+```
+
+```powershell
+$device = "<ADB_DEVICE_SERIAL>"
+$pkg = "com.avelcam.android"
+$activity = "com.avelcam.android.MainActivity"
+New-Item -ItemType Directory -Force ".\artifacts\device-smoke-test" | Out-Null
+```
+
+- [ ] Device detected: `& $adb devices -l` and `& $adb -s $device get-state`
+- [ ] APK hash recorded: `Get-FileHash $apk -Algorithm SHA256`
+- [ ] Install: `& $adb -s $device install -r $apk` → `Success`
+- [ ] Fresh state: `am force-stop`, `pm clear`, `logcat -c`
+- [ ] Launch: `am start -W -n "$pkg/$activity"` (no crash)
+- [ ] First permission prompt shown and handled
+- [ ] **Allow**: rear preview starts (live, not black)
+- [ ] **Rear → Front** works
+- [ ] **Front → Rear** works
+- [ ] 10× switch cycle completes (no freeze/crash)
+- [ ] Background/foreground cycle works (HOME + relaunch)
+- [ ] Rotation works in portrait and landscape
+- [ ] Deny flow shows denied UI and retry path
+- [ ] Permanently denied path opens system settings correctly
+- [ ] Logs clear: no `FATAL EXCEPTION` in `AndroidRuntime`
+
+Decision:
+- [ ] Phase 2 pass
+- [ ] Phase 2 fail
+- [ ] Blocked by environment/user interaction
+```
+
 ## 2. Scope
 
 Covered:
