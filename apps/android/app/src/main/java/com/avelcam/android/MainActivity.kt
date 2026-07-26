@@ -22,10 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -253,8 +251,6 @@ private fun CameraPermissionGrantedScreen(
                 }
 
                 Button(onClick = onSwitch, enabled = uiState.canSwitchCamera) {
-                    Icon(Icons.Default.Cameraswitch, contentDescription = "Switch camera")
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (uiState.selectedLens == CameraSelector.LENS_FACING_BACK) {
                             "Switch to front"
