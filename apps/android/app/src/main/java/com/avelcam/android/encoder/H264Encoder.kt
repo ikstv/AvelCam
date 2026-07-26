@@ -131,7 +131,7 @@ class H264Encoder(
             setString(MediaFormat.KEY_MIME, config.mimeType)
             setInteger(MediaFormat.KEY_WIDTH, config.width)
             setInteger(MediaFormat.KEY_HEIGHT, config.height)
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaFormat.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, config.bitrate)
             setInteger(MediaFormat.KEY_FRAME_RATE, config.frameRate)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, config.iFrameIntervalSeconds)
