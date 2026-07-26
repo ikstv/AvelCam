@@ -1,6 +1,6 @@
 # AvelCam Roadmap
 
-## Phase 1 — Repository foundation
+## Phase 1 - Repository foundation
 
 - Create repository structure and documentation baseline.
 - Define contribution conventions and architecture direction.
@@ -8,7 +8,7 @@
 
 **Status: completed**
 
-## Phase 2 — Android camera preview
+## Phase 2 - Android camera preview
 
 - Scaffold CameraX capture pipeline.
 - Add camera device enumeration and front/rear camera selection.
@@ -22,15 +22,16 @@
 
 **Status: completed**
 
-## Phase 3 — H.264 encoder
+## Phase 3 - H.264 encoder
 
-- Integrate MediaCodec hardware encoding for capture frames.
-- Tune bitrate/keyframe settings for low-latency operation.
-- Define transport metadata and timestamps.
+- Implement synthetic MediaCodec H.264 encoder foundation with surface input.
+- Validate codec selection, codec-config extraction, keyframe detection, and NAL parsing.
+- Validate monotonic presentation timestamps and encoder statistics.
+- Provide debug diagnostics harness and keep CameraX integration out of this phase.
 
-**Status: not implemented**
+**Status: in development**
 
-## Phase 4 — USB streaming through ADB
+## Phase 4 - USB streaming through ADB
 
 - Implement USB transport bootstrap and lifecycle management over ADB.
 - Add reconnect and device-drop recovery.
@@ -38,45 +39,46 @@
 
 **Status: not implemented**
 
-## Phase 5 — Desktop receiver and decoder
+## Phase 5 - Desktop receiver and decoder
 
 - Implement Rust ingest service and decoder path.
 - Add low-latency buffering policy and frame timing metrics.
 
 **Status: not implemented**
 
-## Phase 6 — OBS source plugin
+## Phase 6 - OBS source plugin
 
 - Build native OBS source plugin (C/C++).
 - Render received frames with minimal latency in OBS.
 
 **Status: not implemented**
 
-## Phase 7 — Audio support
+## Phase 7 - Audio support
 
 - Add microphone capture on Android.
-- Add audio transport and mixed timing coordination in OBS.
+- Add audio transport and timing coordination.
 
 **Status: not implemented**
 
-## Phase 8 — Wi‑Fi fallback
+## Phase 8 - Wi-Fi fallback
 
-- Implement Wi‑Fi transport implementation and fallback switch.
-- Add connection selection and reconnection rules.
+- Implement Wi-Fi transport and fallback switching.
+- Add connection selection and reconnect rules.
 
 **Status: not implemented**
 
-## Phase 9 — Direct USB transport without mandatory ADB
+## Phase 9 - Direct USB transport without mandatory ADB
 
 - Move beyond ADB-only transport for production-like USB operation.
-- Add robust direct USB device protocol path.
+- Add direct USB device protocol path.
 
 **Status: not implemented**
 
-## Phase 10 — Packaging, installers and releases
+## Phase 10 - Packaging, installers and releases
 
 - Create installers for Windows and plugin distribution flow.
 - Document release process and versioning.
 - Publish binaries and release artifacts.
 
 **Status: not implemented**
+

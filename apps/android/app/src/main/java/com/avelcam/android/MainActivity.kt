@@ -3,6 +3,7 @@ package com.avelcam.android
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -46,6 +47,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.avelcam.android.camera.CameraPreview
+import com.avelcam.android.encoder.diagnostic.EncoderDiagnosticPanel
 import com.avelcam.android.ui.theme.AvelCamTheme
 import com.avelcam.android.ui.theme.Dark
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -148,6 +150,7 @@ fun CameraScreen(viewModel: CameraViewModel) {
                 .padding(padding),
             color = Dark
         ) {
+            Column {
             when (uiState.permissionState) {
                 PermissionUiState.GRANTED -> {
                     CameraPermissionGrantedScreen(
@@ -196,6 +199,10 @@ fun CameraScreen(viewModel: CameraViewModel) {
                         actionText = "Grant permission",
                         onAction = { permissionLauncher.launch(Manifest.permission.CAMERA) }
                     )
+                }
+            }
+                if ((context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                    EncoderDiagnosticPanel()
                 }
             }
         }
