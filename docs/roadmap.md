@@ -14,7 +14,7 @@
 - Add camera device enumeration and front/rear camera selection.
 - Validate capture latency and frame rate behavior.
 
-**Status: not implemented**
+**Status: in development**
 
 ## Phase 3 — H.264 encoder
 
@@ -74,4 +74,3 @@
 - Publish binaries and release artifacts.
 
 **Status: not implemented**
-

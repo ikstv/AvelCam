@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">AvelCam</string>
+    <string name="permission_not_granted_title">Camera permission is required</string>
+    <string name="permission_denied_title">Camera permission is denied</string>
+    <string name="permission_permanently_denied_title">Camera permission unavailable</string>
+    <string name="permission_denied_message">This screen needs camera access to show the preview.</string>
+    <string name="permission_retry">Grant camera access</string>
+    <string name="permission_open_settings">Open app settings</string>
+    <string name="camera_switch">Switch camera</string>
+    <string name="retry_camera">Retry</string>
+    <string name="error_camera_unavailable">No camera device is available.</string>
+    <string name="camera_current_label">Current camera</string>
+</resources>
+

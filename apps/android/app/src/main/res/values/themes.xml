@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.AvelCam" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">#0F1116</item>
+        <item name="android:windowTranslucentStatus">false</item>
+    </style>
+</resources>
+

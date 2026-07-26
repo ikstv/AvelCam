@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+
+set -eu
+
+if [ -x "$JAVA_HOME/bin/java" ]; then
+  JAVA="$JAVA_HOME/bin/java"
+elif command -v java >/dev/null 2>&1; then
+  JAVA="$(command -v java)"
+else
+  JAVA=""
+fi
+
+if [ -f "./gradle/wrapper/gradle-wrapper.jar" ] && [ -n "$JAVA" ]; then
+  ROOT="$(cd "$(dirname "$0")" && pwd)"
+  CLASSPATH="$ROOT/gradle/wrapper/gradle-wrapper.jar"
+  exec "$JAVA" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+  exit 0
+fi
+
+if ! command -v gradle >/dev/null 2>&1; then
+  if [ -x "/c/Users/tanko/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/bin/gradle" ]; then
+    exec "/c/Users/tanko/.gradle/wrapper/dists/gradle-9.1.0-all/7wzd0jkjit61aq2p43wpjgij9/gradle-9.1.0/bin/gradle" "$@"
+  fi
+
+  echo "Gradle wrapper JAR is missing and a usable gradle executable was not found." >&2
+  exit 1
+fi
+
+exec gradle "$@"
