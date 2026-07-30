@@ -136,7 +136,7 @@ class CameraSurfaceRequestStateMachine(
     )
 
     fun updateTransformation(transformation: CameraSurfaceTransformation) {
-        if (state.state.isTerminal()) {
+        if (isTerminal(state.state)) {
             return
         }
         state = state.copy(transformation = transformation)

@@ -1,5 +1,6 @@
 package com.avelcam.android.camera.pipeline.surface
 
+import android.annotation.SuppressLint
 import android.graphics.Rect
 import android.util.Size
 import android.view.Surface
@@ -236,13 +237,13 @@ internal class CameraSurfaceProvider(
         val cropRect = Rect(info.cropRect)
         return CameraSurfaceTransformation(
             rotationDegrees = info.rotationDegrees,
-            cropRect = CameraSurfaceCropRect(
-                left = cropRect.left,
-                top = cropRect.top,
-                right = cropRect.right,
-                bottom = cropRect.bottom,
-            ),
-            hasCameraTransform = info.hasCameraTransform
+                cropRect = CameraSurfaceCropRect(
+                    left = cropRect.left,
+                    top = cropRect.top,
+                    right = cropRect.right,
+                    bottom = cropRect.bottom,
+                ),
+            hasCameraTransform = info.hasCameraTransform()
         )
     }
 }
@@ -287,7 +288,9 @@ internal class CameraSurfaceRequestAdapter(
     override fun addRequestCancellationListener(executor: Executor, listener: () -> Unit) =
         request.addRequestCancellationListener(executor, listener)
 
-    override fun willNotProvideSurface() = request.willNotProvideSurface()
+    override fun willNotProvideSurface() {
+        request.willNotProvideSurface()
+    }
 
     override fun provideSurface(
         surface: Surface,
@@ -299,7 +302,9 @@ internal class CameraSurfaceRequestAdapter(
         }
     }
 
-    override fun invalidate() = request.invalidate()
+    override fun invalidate() {
+        request.invalidate()
+    }
 }
 
 internal data class CameraSurfaceRequestResultCode(
@@ -309,7 +314,7 @@ internal data class CameraSurfaceRequestResultCode(
 internal interface CameraSurfaceTransformationInfo {
     val rotationDegrees: Int
     val cropRect: Rect
-    val hasCameraTransform: Boolean
+    fun hasCameraTransform(): Boolean
 }
 
 private data class AndroidSurfaceTransformationInfo(
@@ -321,8 +326,8 @@ private data class AndroidSurfaceTransformationInfo(
     override val cropRect: Rect
         get() = Rect(delegate.cropRect)
 
-    override val hasCameraTransform: Boolean
-        get() = delegate.hasCameraTransform
+    @SuppressLint("RestrictedApi")
+    override fun hasCameraTransform(): Boolean = delegate.hasCameraTransform()
 }
 
 private class ActiveSurfaceRequest(

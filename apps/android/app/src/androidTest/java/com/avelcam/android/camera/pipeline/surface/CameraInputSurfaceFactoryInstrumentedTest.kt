@@ -19,9 +19,11 @@ class CameraInputSurfaceFactoryInstrumentedTest {
         assertNotNull(inputSurface.surfaceTexture)
         assertNotNull(inputSurface.surface)
         assertTrue(inputSurface.surface.isValid)
-        val size = inputSurface.surfaceTexture.getDefaultBufferSize()
-        assertEquals(640, size.width)
-        assertEquals(360, size.height)
+        val bufferSize = inputSurface.surfaceTexture::class.java
+            .getMethod("getDefaultBufferSize")
+            .invoke(inputSurface.surfaceTexture) as android.util.Size
+        assertEquals(640, bufferSize.width)
+        assertEquals(360, bufferSize.height)
     }
 
     @Test

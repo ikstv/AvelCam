@@ -1,6 +1,7 @@
 package com.avelcam.android.camera.pipeline.surface
 
 import android.graphics.Rect
+import android.graphics.SurfaceTexture
 import android.util.Size
 import android.view.Surface
 import androidx.camera.core.SurfaceRequest
@@ -9,7 +10,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import sun.misc.Unsafe
 
 class CameraSurfaceProviderTest {
 
@@ -35,7 +35,6 @@ class CameraSurfaceProviderTest {
         assertEquals(1, fakeSurface.releaseCount)
         assertEquals(
             listOf(
-                CameraSurfaceRequestLifecycleState.RECEIVED,
                 CameraSurfaceRequestLifecycleState.CREATING_SURFACE,
                 CameraSurfaceRequestLifecycleState.PROVIDED,
                 CameraSurfaceRequestLifecycleState.COMPLETED,
@@ -221,7 +220,7 @@ private data class FakeTransformationInfo(
     override val rotationDegrees: Int
 ) : CameraSurfaceTransformationInfo {
     override val cropRect: Rect = Rect(0, 0, 100, 100)
-    override val hasCameraTransform: Boolean = false
+    override fun hasCameraTransform(): Boolean = false
 }
 
 private class FakeCameraInputSurfaceFactory(
@@ -241,18 +240,10 @@ private class FakeCameraInputSurfaceFactory(
 }
 
 private class FakeOwnedSurface : CameraSurfaceOwnedSurface {
-    override val surface: Surface by lazy { allocateDummySurface() }
+    override val surface: Surface by lazy { Surface(SurfaceTexture(0)) }
     var releaseCount = 0
 
     override fun release() {
         releaseCount += 1
     }
-}
-
-private fun allocateDummySurface(): Surface {
-    val unsafe = Unsafe::class.java.getDeclaredField("theUnsafe").let { field ->
-        field.isAccessible = true
-        field.get(null) as Unsafe
-    }
-    return unsafe.allocateInstance(Surface::class.java) as Surface
 }

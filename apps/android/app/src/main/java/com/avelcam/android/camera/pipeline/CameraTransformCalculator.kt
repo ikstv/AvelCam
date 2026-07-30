@@ -23,12 +23,17 @@ class CameraTransformCalculator {
         require(input.rotationDegrees == 0 || input.rotationDegrees == 90 || input.rotationDegrees == 180 || input.rotationDegrees == 270)
         require(input.surfaceTextureMatrix.size == 16)
 
-        val sourceAspect = input.sourceWidth.toDouble() / input.sourceHeight.toDouble()
+        val isRotated = input.rotationDegrees == 90 || input.rotationDegrees == 270
+        val sourceAspect = if (isRotated) {
+            input.sourceHeight.toDouble() / input.sourceWidth.toDouble()
+        } else {
+            input.sourceWidth.toDouble() / input.sourceHeight.toDouble()
+        }
         val destinationAspect = input.destinationWidth.toDouble() / input.destinationHeight.toDouble()
         val scales = calculateCropScales(sourceAspect, destinationAspect, input.cropMode)
 
         var matrix = identityMatrix4()
-        matrix = multiply(matrix, scaleMatrix(scales.second, scales.third))
+        matrix = multiply(matrix, scaleMatrix(scales.second[0], scales.second[1]))
         matrix = multiply(matrix, rotateMatrix(input.rotationDegrees))
         if (input.mirror) {
             matrix = multiply(matrix, mirrorMatrix())
@@ -89,7 +94,7 @@ class CameraTransformCalculator {
         return when (rotationDegrees) {
             0 -> identityMatrix4()
             90 -> floatArrayOf(
-                0f, 1f, 0f, 0f,
+                0f, 0f, 0f, 0f,
                 -1f, 0f, 0f, 1f,
                 0f, 0f, 1f, 0f,
                 0f, 0f, 0f, 1f
@@ -101,7 +106,7 @@ class CameraTransformCalculator {
                 0f, 0f, 0f, 1f
             )
             270 -> floatArrayOf(
-                0f, -1f, 0f, 1f,
+                0f, 0f, 0f, 1f,
                 1f, 0f, 0f, 0f,
                 0f, 0f, 1f, 0f,
                 0f, 0f, 0f, 1f
