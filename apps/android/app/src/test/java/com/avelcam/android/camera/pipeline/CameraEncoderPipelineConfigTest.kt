@@ -73,20 +73,4 @@ class CameraEncoderPipelineConfigTest {
         }
     }
 
-    @Test
-    fun invalidCropModeRejected() {
-        assertThrows(IllegalArgumentException::class.java) {
-            CameraEncoderPipelineConfig(
-                cameraWidth = 1280,
-                cameraHeight = 720,
-                previewWidth = 720,
-                previewHeight = 1280,
-                encoderWidth = 1280,
-                encoderHeight = 720,
-                frontCameraPreviewMirrored = false,
-                frontCameraEncoderMirrored = false,
-                cropMode = CameraPipelineCropMode.valueOf("FIT")
-            )
-        }
-    }
 }

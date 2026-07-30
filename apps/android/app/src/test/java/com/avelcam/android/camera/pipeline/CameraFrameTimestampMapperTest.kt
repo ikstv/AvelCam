@@ -16,7 +16,7 @@ class CameraFrameTimestampMapperTest {
         assertEquals(1000L, first)
         assertEquals(2000L, second)
         assertEquals(3000L, third)
-        assertEquals(0L, mapper.snapshot().correctionCount)
+        assertEquals(0, mapper.snapshot().correctionCount)
         assertEquals(0L, mapper.snapshot().fallbackCount.toLong())
     }
 
