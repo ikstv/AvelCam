@@ -3,6 +3,16 @@ package com.avelcam.android.camera.pipeline
 import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * Texture transform math for CameraX SurfaceTexture matrices + logical rotation/mirror.
+ *
+ * Convention:
+ * - Matrices are stored in row-major order.
+ * - Points are column vectors [x, y, 0, 1]^T.
+ * - Matrix order follows left-to-right composition through multiply(left, right).
+ * - Multiplication result multiplies matrices so right-most transform applies first.
+ */
+
 data class CameraTransformInput(
     val sourceWidth: Int,
     val sourceHeight: Int,
@@ -60,7 +70,11 @@ class CameraTransformCalculator {
     ): Pair<Quad, DoubleArray> {
         return when (mode) {
             CameraPipelineCropMode.FIT -> {
-                val ratio = if (sourceAspect > destinationAspect) destinationAspect / sourceAspect else sourceAspect / destinationAspect
+                val ratio = if (sourceAspect > destinationAspect) {
+                    destinationAspect / sourceAspect
+                } else {
+                    sourceAspect / destinationAspect
+                }
                 val scale = min(1.0, ratio)
                 Pair(Quad(0.0, 0.0, 1.0, 1.0), doubleArrayOf(1.0, scale))
             }
@@ -94,7 +108,7 @@ class CameraTransformCalculator {
         return when (rotationDegrees) {
             0 -> identityMatrix4()
             90 -> floatArrayOf(
-                0f, 0f, 0f, 0f,
+                0f, 1f, 0f, 0f,
                 -1f, 0f, 0f, 1f,
                 0f, 0f, 1f, 0f,
                 0f, 0f, 0f, 1f
@@ -106,7 +120,7 @@ class CameraTransformCalculator {
                 0f, 0f, 0f, 1f
             )
             270 -> floatArrayOf(
-                0f, 0f, 0f, 1f,
+                0f, -1f, 0f, 1f,
                 1f, 0f, 0f, 0f,
                 0f, 0f, 1f, 0f,
                 0f, 0f, 0f, 1f
@@ -151,5 +165,10 @@ class CameraTransformCalculator {
     }
 }
 
-private data class Quad(val first: Double, val second: Double, val third: Double, val fourth: Double)
+internal fun mapPoint(matrix: FloatArray, x: Float, y: Float): Pair<Float, Float> {
+    val mappedX = matrix[0] * x + matrix[1] * y + matrix[3]
+    val mappedY = matrix[4] * x + matrix[5] * y + matrix[7]
+    return mappedX to mappedY
+}
 
+private data class Quad(val first: Double, val second: Double, val third: Double, val fourth: Double)

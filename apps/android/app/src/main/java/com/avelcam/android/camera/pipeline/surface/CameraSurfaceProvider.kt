@@ -1,9 +1,4 @@
 package com.avelcam.android.camera.pipeline.surface
-
-import android.annotation.SuppressLint
-import android.graphics.Rect
-import android.util.Size
-import android.view.Surface
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import java.util.concurrent.Executor
@@ -36,8 +31,8 @@ internal class CameraSurfaceProvider(
         val machine = CameraSurfaceRequestStateMachine(
             requestId = requestId,
             requestedResolution = CameraSurfaceRequestResolution(
-                width = maxOf(1, surfaceRequest.resolution.width),
-                height = maxOf(1, surfaceRequest.resolution.height)
+                width = maxOf(1, surfaceRequest.requestedWidth),
+                height = maxOf(1, surfaceRequest.requestedHeight)
             )
         )
 
@@ -97,7 +92,7 @@ internal class CameraSurfaceProvider(
 
         val inputSurface = try {
             surfaceFactory.create(
-                Size(machine.snapshot().requestedResolution.width, machine.snapshot().requestedResolution.height)
+                machine.snapshot().requestedResolution
             )
         } catch (failure: CameraInputSurfaceFailure) {
             machine.transitionToFailed(
@@ -234,49 +229,51 @@ internal class CameraSurfaceProvider(
     }
 
     private fun mapTransformation(info: CameraSurfaceTransformationInfo): CameraSurfaceTransformation {
-        val cropRect = Rect(info.cropRect)
         return CameraSurfaceTransformation(
             rotationDegrees = info.rotationDegrees,
-                cropRect = CameraSurfaceCropRect(
-                    left = cropRect.left,
-                    top = cropRect.top,
-                    right = cropRect.right,
-                    bottom = cropRect.bottom,
-                ),
-            hasCameraTransform = info.hasCameraTransform()
+            cropRect = CameraSurfaceCropRect(
+                left = info.cropLeft,
+                top = info.cropTop,
+                right = info.cropRight,
+                bottom = info.cropBottom,
+            ),
         )
     }
 }
 
 internal interface CameraSurfaceRequest {
-        val resolution: Size
+    val requestedWidth: Int
+    val requestedHeight: Int
 
-        fun setTransformationInfoListener(
-            executor: Executor,
-            listener: (CameraSurfaceTransformationInfo) -> Unit
-        )
+    fun setTransformationInfoListener(
+        executor: Executor,
+        listener: (CameraSurfaceTransformationInfo) -> Unit
+    )
 
-        fun addRequestCancellationListener(
-            executor: Executor,
-            listener: () -> Unit
-        )
+    fun addRequestCancellationListener(
+        executor: Executor,
+        listener: () -> Unit
+    )
 
-        fun willNotProvideSurface()
+    fun willNotProvideSurface()
 
-        fun provideSurface(
-            surface: Surface,
-            executor: Executor,
-            listener: (CameraSurfaceRequestResultCode) -> Unit
-        )
+    fun provideSurface(
+        surface: CameraSurfaceRequestSurface,
+        executor: Executor,
+        listener: (CameraSurfaceRequestResultCode) -> Unit
+    )
 
-        fun invalidate()
+    fun invalidate()
 }
 
 internal class CameraSurfaceRequestAdapter(
     private val request: SurfaceRequest
 ) : CameraSurfaceRequest {
-    override val resolution: Size
-        get() = request.resolution
+    override val requestedWidth: Int
+        get() = request.resolution.width
+
+    override val requestedHeight: Int
+        get() = request.resolution.height
 
     override fun setTransformationInfoListener(
         executor: Executor,
@@ -293,11 +290,11 @@ internal class CameraSurfaceRequestAdapter(
     }
 
     override fun provideSurface(
-        surface: Surface,
+        surface: CameraSurfaceRequestSurface,
         executor: Executor,
         listener: (CameraSurfaceRequestResultCode) -> Unit
     ) {
-        request.provideSurface(surface, executor) { result ->
+        request.provideSurface(surface.resolveSurface(), executor) { result ->
             listener(CameraSurfaceRequestResultCode(result.resultCode))
         }
     }
@@ -313,8 +310,10 @@ internal data class CameraSurfaceRequestResultCode(
 
 internal interface CameraSurfaceTransformationInfo {
     val rotationDegrees: Int
-    val cropRect: Rect
-    fun hasCameraTransform(): Boolean
+    val cropLeft: Int
+    val cropTop: Int
+    val cropRight: Int
+    val cropBottom: Int
 }
 
 private data class AndroidSurfaceTransformationInfo(
@@ -323,11 +322,17 @@ private data class AndroidSurfaceTransformationInfo(
     override val rotationDegrees: Int
         get() = delegate.rotationDegrees
 
-    override val cropRect: Rect
-        get() = Rect(delegate.cropRect)
+    override val cropLeft: Int
+        get() = delegate.cropRect.left
 
-    @SuppressLint("RestrictedApi")
-    override fun hasCameraTransform(): Boolean = delegate.hasCameraTransform()
+    override val cropTop: Int
+        get() = delegate.cropRect.top
+
+    override val cropRight: Int
+        get() = delegate.cropRect.right
+
+    override val cropBottom: Int
+        get() = delegate.cropRect.bottom
 }
 
 private class ActiveSurfaceRequest(

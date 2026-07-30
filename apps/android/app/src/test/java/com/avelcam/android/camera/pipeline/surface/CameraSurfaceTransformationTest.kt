@@ -11,7 +11,6 @@ class CameraSurfaceTransformationTest {
         val transformation = CameraSurfaceTransformation(
             rotationDegrees = 90,
             cropRect = rect,
-            hasCameraTransform = false
         )
 
         assertEquals(90, transformation.rotationDegrees)
@@ -23,7 +22,6 @@ class CameraSurfaceTransformationTest {
         CameraSurfaceTransformation(
             rotationDegrees = 45,
             cropRect = CameraSurfaceCropRect(0, 0, 10, 10),
-            hasCameraTransform = false
         )
     }
 }

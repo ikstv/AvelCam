@@ -1,9 +1,5 @@
 package com.avelcam.android.camera.pipeline.surface
 
-import android.graphics.Rect
-import android.graphics.SurfaceTexture
-import android.util.Size
-import android.view.Surface
 import androidx.camera.core.SurfaceRequest
 import java.util.concurrent.Executor
 import org.junit.Assert.assertEquals
@@ -27,7 +23,7 @@ class CameraSurfaceProviderTest {
             requestResultObserver = { _, result, _, _ -> resultSnapshots += result }
         )
 
-        val request = FakeCameraSurfaceRequest(Size(640, 360))
+        val request = FakeCameraSurfaceRequest(640, 360)
         provider.handleSurfaceRequest(request)
 
         request.emitResult(SurfaceRequest.Result.RESULT_SURFACE_USED_SUCCESSFULLY)
@@ -38,7 +34,7 @@ class CameraSurfaceProviderTest {
                 CameraSurfaceRequestLifecycleState.CREATING_SURFACE,
                 CameraSurfaceRequestLifecycleState.PROVIDED,
                 CameraSurfaceRequestLifecycleState.COMPLETED,
-                CameraSurfaceRequestLifecycleState.RELEASED
+                CameraSurfaceRequestLifecycleState.RELEASED,
             ),
             stateSnapshots
         )
@@ -57,7 +53,7 @@ class CameraSurfaceProviderTest {
             requestResultObserver = { _, result, _, _ -> resultSnapshots += result }
         )
 
-        val request = FakeCameraSurfaceRequest(Size(320, 240))
+        val request = FakeCameraSurfaceRequest(320, 240)
         provider.handleSurfaceRequest(request)
         provider.release()
 
@@ -80,7 +76,7 @@ class CameraSurfaceProviderTest {
             surfaceFactory = factory
         )
 
-        val request = FakeCameraSurfaceRequest(Size(320, 240))
+        val request = FakeCameraSurfaceRequest(320, 240)
         provider.handleSurfaceRequest(request)
 
         request.emitResult(SurfaceRequest.Result.RESULT_REQUEST_CANCELLED)
@@ -102,8 +98,8 @@ class CameraSurfaceProviderTest {
             requestResultObserver = { _, result, _, _ -> requestResultCount += result }
         )
 
-        val first = FakeCameraSurfaceRequest(Size(640, 360))
-        val second = FakeCameraSurfaceRequest(Size(640, 360))
+        val first = FakeCameraSurfaceRequest(640, 360)
+        val second = FakeCameraSurfaceRequest(640, 360)
 
         provider.handleSurfaceRequest(first)
         provider.handleSurfaceRequest(second)
@@ -121,7 +117,7 @@ class CameraSurfaceProviderTest {
     fun repeatedShutdownIsIdempotent() {
         val fakeSurface = FakeOwnedSurface()
         val factory = FakeCameraInputSurfaceFactory(fakeSurface)
-        val request = FakeCameraSurfaceRequest(Size(640, 360))
+        val request = FakeCameraSurfaceRequest(640, 360)
 
         val provider = CameraSurfaceProvider(
             callbackExecutor = ImmediateExecutor,
@@ -150,7 +146,7 @@ class CameraSurfaceProviderTest {
             requestStateObserver = { }
         )
 
-        val request = FakeCameraSurfaceRequest(Size(640, 360))
+        val request = FakeCameraSurfaceRequest(640, 360)
         provider.handleSurfaceRequest(request)
 
         request.emitTransformation(0)
@@ -166,10 +162,12 @@ private object ImmediateExecutor : Executor {
 }
 
 private class FakeCameraSurfaceRequest(
-    override val resolution: Size
+    override val requestedWidth: Int,
+    override val requestedHeight: Int
 ) : CameraSurfaceRequest {
     var transformationListener: ((CameraSurfaceTransformationInfo) -> Unit)? = null
     var resultConsumer: ((CameraSurfaceRequestResultCode) -> Unit)? = null
+    var cancellationListener: (() -> Unit)? = null
 
     var provideCalled = false
     var invalidateCalled = false
@@ -185,7 +183,7 @@ private class FakeCameraSurfaceRequest(
     }
 
     override fun addRequestCancellationListener(executor: Executor, listener: () -> Unit) {
-        listener // no-op path for compatibility
+        cancellationListener = { executor.execute(listener) }
     }
 
     override fun willNotProvideSurface() {
@@ -193,7 +191,7 @@ private class FakeCameraSurfaceRequest(
     }
 
     override fun provideSurface(
-        surface: Surface,
+        surface: CameraSurfaceRequestSurface,
         executor: Executor,
         listener: (CameraSurfaceRequestResultCode) -> Unit
     ) {
@@ -201,6 +199,7 @@ private class FakeCameraSurfaceRequest(
         resultConsumer = {
             executor.execute { listener(it) }
         }
+
     }
 
     override fun invalidate() {
@@ -214,14 +213,19 @@ private class FakeCameraSurfaceRequest(
     fun emitResult(resultCode: Int) {
         resultConsumer?.let { callback -> callback(CameraSurfaceRequestResultCode(resultCode)) }
     }
+
+    fun emitCancellation() {
+        cancellationListener?.invoke()
+    }
 }
 
 private data class FakeTransformationInfo(
-    override val rotationDegrees: Int
-) : CameraSurfaceTransformationInfo {
-    override val cropRect: Rect = Rect(0, 0, 100, 100)
-    override fun hasCameraTransform(): Boolean = false
-}
+    override val rotationDegrees: Int,
+    override val cropLeft: Int = 0,
+    override val cropTop: Int = 0,
+    override val cropRight: Int = 100,
+    override val cropBottom: Int = 100,
+) : CameraSurfaceTransformationInfo
 
 private class FakeCameraInputSurfaceFactory(
     private vararg val surfaces: CameraSurfaceOwnedSurface
@@ -229,7 +233,7 @@ private class FakeCameraInputSurfaceFactory(
     private var index = 0
     var createCount = 0
 
-    override fun create(resolution: Size): CameraSurfaceOwnedSurface {
+    override fun create(resolution: CameraSurfaceRequestResolution): CameraSurfaceOwnedSurface {
         return if (index < surfaces.size) {
             createCount += 1
             surfaces[index++]
@@ -239,11 +243,26 @@ private class FakeCameraInputSurfaceFactory(
     }
 }
 
-private class FakeOwnedSurface : CameraSurfaceOwnedSurface {
-    override val surface: Surface by lazy { Surface(SurfaceTexture(0)) }
+private class FakeCameraSurfaceRequestToken : CameraSurfaceRequestSurface {
     var releaseCount = 0
 
+    override fun resolveSurface() = throw IllegalStateException("Unit tests should not resolve surfaces.")
+
     override fun release() {
-        releaseCount += 1
+        releaseCount++
+    }
+}
+
+private class FakeOwnedSurface : CameraSurfaceOwnedSurface {
+    override val surface: CameraSurfaceRequestSurface by lazy { FakeCameraSurfaceRequestToken() }
+    val token get() = surface as FakeCameraSurfaceRequestToken
+    var releaseCount: Int
+        get() = token.releaseCount
+        set(value) {
+            token.releaseCount = value
+        }
+
+    override fun release() {
+        surface.release()
     }
 }

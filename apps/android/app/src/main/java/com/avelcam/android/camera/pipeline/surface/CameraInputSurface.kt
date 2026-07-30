@@ -6,14 +6,34 @@ import android.view.Surface
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal interface CameraSurfaceOwnedSurface {
-    val surface: Surface
+    val surface: CameraSurfaceRequestSurface
     fun release()
+}
+
+internal interface CameraSurfaceRequestSurface {
+    fun resolveSurface(): Surface
+    fun release()
+}
+
+internal class AndroidSurfaceRequestToken(
+    private val surface: Surface
+) : CameraSurfaceRequestSurface {
+    private val isReleased = AtomicBoolean(false)
+
+    override fun resolveSurface(): Surface = surface
+
+    override fun release() {
+        if (!isReleased.compareAndSet(false, true)) {
+            return
+        }
+        surface.release()
+    }
 }
 
 internal class CameraInputSurface internal constructor(
     val resolution: Size,
     val surfaceTexture: SurfaceTexture,
-    override val surface: Surface
+    override val surface: CameraSurfaceRequestSurface
 ) : CameraSurfaceOwnedSurface {
     private val isReleased = AtomicBoolean(false)
 
@@ -46,7 +66,7 @@ internal class CameraInputSurface internal constructor(
             return CameraInputSurface(
                 resolution = resolution,
                 surfaceTexture = surfaceTexture,
-                surface = surface
+                surface = AndroidSurfaceRequestToken(surface)
             )
         }
     }

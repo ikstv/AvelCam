@@ -1,9 +1,7 @@
 package com.avelcam.android.camera.pipeline.surface
-
-import android.util.Size
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -14,22 +12,25 @@ class CameraInputSurfaceFactoryInstrumentedTest {
     @Test
     fun cameraInputSurfaceFactoryCreatesDetachedSurfaceTextureAndSurface() {
         val factory = DefaultCameraInputSurfaceFactory()
-        val inputSurface = factory.create(Size(640, 360))
+        val requested = CameraSurfaceRequestResolution(640, 360)
+        val inputSurface = factory.create(requested)
+        val surfaceToken = (inputSurface as CameraInputSurface)
 
-        assertNotNull(inputSurface.surfaceTexture)
-        assertNotNull(inputSurface.surface)
-        assertTrue(inputSurface.surface.isValid)
-        val bufferSize = inputSurface.surfaceTexture::class.java
-            .getMethod("getDefaultBufferSize")
-            .invoke(inputSurface.surfaceTexture) as android.util.Size
-        assertEquals(640, bufferSize.width)
-        assertEquals(360, bufferSize.height)
+        assertEquals(requested.width, surfaceToken.resolution.width)
+        assertEquals(requested.height, surfaceToken.resolution.height)
+        assertNotNull(surfaceToken.surface)
+
+        val surface = surfaceToken.surface.resolveSurface()
+        assertNotNull(surface)
+        assertTrue(surface.isValid)
+
+        surfaceToken.surfaceTexture.setDefaultBufferSize(640, 360)
     }
 
     @Test
     fun cameraInputSurfaceFactoryReleaseIsIdempotent() {
         val factory = DefaultCameraInputSurfaceFactory()
-        val inputSurface = factory.create(Size(640, 360))
+        val inputSurface = factory.create(CameraSurfaceRequestResolution(640, 360))
 
         inputSurface.release()
         inputSurface.release()

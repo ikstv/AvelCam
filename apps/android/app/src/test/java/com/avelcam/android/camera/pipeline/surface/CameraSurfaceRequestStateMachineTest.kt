@@ -102,13 +102,11 @@ class CameraSurfaceRequestStateMachineTest {
 
         val first = CameraSurfaceTransformation(
             rotationDegrees = 0,
-            cropRect = CameraSurfaceCropRect(0, 0, 10, 10),
-            hasCameraTransform = true
+            cropRect = CameraSurfaceCropRect(0, 0, 10, 10)
         )
         val second = CameraSurfaceTransformation(
             rotationDegrees = 90,
-            cropRect = CameraSurfaceCropRect(1, 1, 11, 11),
-            hasCameraTransform = false
+            cropRect = CameraSurfaceCropRect(1, 1, 11, 11)
         )
 
         machine.transitionToCreatingSurface()
