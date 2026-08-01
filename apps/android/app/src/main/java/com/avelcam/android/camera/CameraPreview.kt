@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.avelcam.android.camera.pipeline.CameraFrameCoalescer
 import com.avelcam.android.camera.pipeline.CameraFrameMetadata
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntime
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntimeConfig
@@ -141,6 +142,7 @@ private fun bindPreview(
                     runtime = runtime,
                     previewDestination = previewDestination,
                     onError = onRuntimeError,
+                    analysisExecutor = analysisExecutor,
                 ))
             }
 
@@ -162,29 +164,61 @@ private class FanoutFrameAnalyzer(
     private val runtime: CameraGlFanoutRuntime,
     private val previewDestination: FanoutPreviewDestinationRegistry,
     private val onError: (String) -> Unit,
+    analysisExecutor: Executor,
 ) : ImageAnalysis.Analyzer {
     private val lock = Any()
+    private val frameCoalescer = CameraFrameCoalescer { analysisExecutor.execute { renderPendingFrame() } }
+    private var latestFrame: CameraGlFanoutFramePayload? = null
+
+    private data class CameraGlFanoutFramePayload(
+        val sourceWidth: Int,
+        val sourceHeight: Int,
+        val metadata: CameraFrameMetadata,
+    )
 
     override fun analyze(image: ImageProxy) {
         try {
             ensureRuntimeRunning(image.width, image.height)
             previewDestination.ensureDestinationRegistered(runtime, image.width, image.height)
 
-            runtime.onCameraFrame(
-                sourceWidth = image.width,
-                sourceHeight = image.height,
-                metadata = CameraFrameMetadata(
-                    sourceTimestampNs = normalizeTimestamp(image.imageInfo.timestamp),
-                    mappedTimestampNs = 0L,
-                    rotationDegrees = normalizeRotation(image.imageInfo.rotationDegrees),
-                    isFrontCamera = selectedLens == CameraSelector.LENS_FACING_FRONT,
-                    surfaceTextureTransformMatrix = IDENTITY_SURFACE_TEXTURE_MATRIX,
+            synchronized(lock) {
+                latestFrame = CameraGlFanoutFramePayload(
+                    sourceWidth = image.width,
+                    sourceHeight = image.height,
+                    metadata = CameraFrameMetadata(
+                        sourceTimestampNs = normalizeTimestamp(image.imageInfo.timestamp),
+                        mappedTimestampNs = 0L,
+                        rotationDegrees = normalizeRotation(image.imageInfo.rotationDegrees),
+                        isFrontCamera = selectedLens == CameraSelector.LENS_FACING_FRONT,
+                        surfaceTextureTransformMatrix = IDENTITY_SURFACE_TEXTURE_MATRIX,
+                    ),
                 )
-            )
+            }
+            frameCoalescer.onFrameAvailable()
         } catch (error: Throwable) {
             onError(error.localizedMessage ?: "Frame processing failed")
         } finally {
             image.close()
+        }
+    }
+
+    private fun renderPendingFrame() {
+        val frame = synchronized(lock) {
+            val pending = latestFrame
+            latestFrame = null
+            pending
+        } ?: return
+
+        try {
+            runtime.onCameraFrame(
+                sourceWidth = frame.sourceWidth,
+                sourceHeight = frame.sourceHeight,
+                metadata = frame.metadata,
+            )
+        } catch (error: Throwable) {
+            onError(error.localizedMessage ?: "Frame processing failed")
+        } finally {
+            frameCoalescer.onRenderCompleted()
         }
     }
 
@@ -210,8 +244,6 @@ private class FanoutFrameAnalyzer(
                 if (startResult.isFailure) {
                     throw startResult.exceptionOrNull() ?: IllegalStateException("Runtime failed to start.")
                 }
-            } else {
-                return
             }
         }
     }
