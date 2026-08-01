@@ -27,6 +27,7 @@ import com.avelcam.android.camera.pipeline.CameraEncoderOutputManager
 import com.avelcam.android.camera.pipeline.CameraFrameCoalescer
 import com.avelcam.android.camera.pipeline.CameraFrameMetadata
 import com.avelcam.android.camera.pipeline.CameraGlFanoutController
+import com.avelcam.android.camera.pipeline.GlFanoutEglContext
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntime
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntimeConfig
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
@@ -54,11 +55,7 @@ internal fun CameraPreview(
     val lifecycleOwner = LocalLifecycleOwner.current
     var effectiveCameraInputSurfaceMode by remember { mutableStateOf(cameraInputSurfaceMode) }
     var fallbackScheduled by remember { mutableStateOf(false) }
-    val previewView = remember {
-        PreviewView(context).apply {
-            scaleType = PreviewView.ScaleType.FILL_CENTER
-        }
-    }
+    val previewView = remember { PreviewView(context) }
     val destinationSurfaceFactory = remember {
         AtomicReference<(Surface) -> EglInputSurface> { surface ->
             EglInputSurface(surface)
@@ -93,10 +90,7 @@ internal fun CameraPreview(
         fallbackScheduled = false
     }
 
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { previewView }
-    )
+    AndroidView(modifier = Modifier.fillMaxSize(), factory = { previewView })
 
     DisposableEffect(selectedLens, lifecycleOwner, effectiveCameraInputSurfaceMode) {
         var disposed = false
@@ -104,10 +98,14 @@ internal fun CameraPreview(
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val analysisExecutor = Executors.newSingleThreadExecutor()
         val previewDestination = FanoutPreviewDestinationRegistry(destinationSurfaceFactory)
-        val frameBridge = FanoutSurfaceFrameBridge(runtime = runtime, analysisExecutor = analysisExecutor)
         var frameAnalyzer: FanoutFrameAnalyzer? = null
         var surfaceFactoryOwner: CameraInputSurfaceFactoryOwner? = null
         var surfaceProvider: CameraSurfaceProvider? = null
+        val frameBridge = FanoutSurfaceFrameBridge(
+            runtime = runtime,
+            analysisExecutor = analysisExecutor,
+            eglContextProvider = { surfaceFactoryOwner?.eglContext },
+        )
 
         providerFuture.addListener(
             {
@@ -122,6 +120,8 @@ internal fun CameraPreview(
                     analysisExecutor = analysisExecutor,
                     previewDestination = previewDestination,
                     frameBridge = frameBridge,
+                    previewSurface = null,
+                    previewView = previewView,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
                     onSurfaceFactoryOwnerCreated = { owner ->
                         surfaceFactoryOwner = owner
@@ -192,6 +192,8 @@ private fun bindPreview(
     analysisExecutor: Executor,
     previewDestination: FanoutPreviewDestinationRegistry,
     frameBridge: FanoutSurfaceFrameBridge,
+    previewSurface: Surface?,
+    previewView: PreviewView,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
     onSurfaceProviderCreated: (CameraSurfaceProvider) -> Unit,
     cameraInputSurfaceMode: CameraInputSurfaceMode,
@@ -246,8 +248,11 @@ private fun bindPreview(
         )
         onSurfaceProviderCreated(surfaceProvider)
 
-        val preview = androidx.camera.core.Preview.Builder().build().also {
+        val fanoutPreview = androidx.camera.core.Preview.Builder().build().also {
             it.setSurfaceProvider(surfaceProvider)
+        }
+        val displayPreview = androidx.camera.core.Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
         surfaceFactory.setListener { surface ->
@@ -263,6 +268,7 @@ private fun bindPreview(
                     selectedLens = selectedLens,
                     runtime = runtime,
                     previewDestination = previewDestination,
+                    previewSurface = previewSurface,
                     onError = onRuntimeError,
                     analysisExecutor = analysisExecutor,
                     onMetadata = { metadata ->
@@ -277,7 +283,8 @@ private fun bindPreview(
         provider.bindToLifecycle(
             lifecycleOwner,
             selector,
-            preview,
+            fanoutPreview,
+            displayPreview,
             imageAnalysis,
         )
         onError(null)
@@ -292,6 +299,7 @@ private class FanoutFrameAnalyzer(
     private val previewDestination: FanoutPreviewDestinationRegistry,
     private val onError: (String) -> Unit,
     analysisExecutor: Executor,
+    private val previewSurface: Surface?,
     private val onMetadata: (CameraFrameMetadata) -> Unit,
 ) : ImageAnalysis.Analyzer {
     private val lock = Any()
@@ -315,7 +323,12 @@ private class FanoutFrameAnalyzer(
             )
             ensureRuntimeRunning(image.width, image.height)
             onMetadata(metadata)
-            previewDestination.ensureDestinationRegistered(runtime, image.width, image.height)
+            previewDestination.ensureDestinationRegistered(
+                runtime = runtime,
+                width = image.width,
+                height = image.height,
+                previewSurface = previewSurface,
+            )
 
             synchronized(lock) {
                 latestFrame = CameraGlFanoutFramePayload(
@@ -408,6 +421,7 @@ private class FanoutFrameAnalyzer(
 private class FanoutSurfaceFrameBridge(
     private val runtime: CameraGlFanoutRuntime,
     private val analysisExecutor: Executor,
+    private val eglContextProvider: () -> GlFanoutEglContext?,
 ) {
     private val lock = Any()
     private val frameCoalescer = CameraFrameCoalescer { analysisExecutor.execute { onFrameAvailable() } }
@@ -429,11 +443,7 @@ private class FanoutSurfaceFrameBridge(
             lastSourceWidth = surface.resolution.width
             lastSourceHeight = surface.resolution.height
             activeSurfaceTexture?.setOnFrameAvailableListener {
-                val nextTransform = FloatArray(16)
-                activeSurfaceTexture?.getTransformMatrix(nextTransform)
-                synchronized(lock) {
-                    latestSurfaceTransform = nextTransform
-                }
+                Log.d("AvelCamCamera", "input SurfaceTexture frame available")
                 frameCoalescer.onFrameAvailable()
             }
         }
@@ -470,6 +480,22 @@ private class FanoutSurfaceFrameBridge(
             activeSurfaceTexture ?: return
         }
 
+        try {
+            val nextTransform = FloatArray(16)
+            val updateSurfaceTexture = {
+                texture.updateTexImage()
+                texture.getTransformMatrix(nextTransform)
+            }
+            eglContextProvider()?.runWithContext(updateSurfaceTexture) ?: updateSurfaceTexture()
+            synchronized(lock) {
+                latestSurfaceTransform = nextTransform.copyOf()
+            }
+        } catch (error: Throwable) {
+            Log.e("AvelCamCamera", "input SurfaceTexture update failed", error)
+            frameCoalescer.onRenderCompleted()
+            return
+        }
+
         if (!runtime.isRunning()) {
             frameCoalescer.onRenderCompleted()
             return
@@ -483,7 +509,6 @@ private class FanoutSurfaceFrameBridge(
         }
 
         try {
-            texture.updateTexImage()
             val textureTimestamp = texture.timestamp
             runtime.onCameraFrame(
                 sourceWidth = lastSourceWidth.coerceAtLeast(1),
@@ -497,6 +522,8 @@ private class FanoutSurfaceFrameBridge(
                 ),
                 sourceTextureId = activeSourceTextureId,
             )
+        } catch (error: IllegalStateException) {
+            // Ignore late frame delivery when runtime is shutting down or already released.
         } finally {
             frameCoalescer.onRenderCompleted()
         }
@@ -523,17 +550,40 @@ private class FanoutPreviewDestinationRegistry(
     private val destinationSurfaceFactory: AtomicReference<(Surface) -> EglInputSurface>,
 ) {
     private val lock = Any()
-    private var surfaceTexture: SurfaceTexture? = null
     private var destination: PreviewSurfaceGlDestination? = null
+    private var destinationSurface: Surface? = null
     private var destinationWidth: Int = 0
     private var destinationHeight: Int = 0
 
-    fun ensureDestinationRegistered(runtime: CameraGlFanoutRuntime, width: Int, height: Int) {
+    fun ensureDestinationRegistered(
+        runtime: CameraGlFanoutRuntime,
+        width: Int,
+        height: Int,
+        previewSurface: Surface?,
+    ) {
         synchronized(lock) {
+            if (previewSurface == null) {
+                val currentDestination = destination
+                if (currentDestination != null) {
+                    runtime.unregisterPreviewDestination(currentDestination)
+                    currentDestination.release()
+                    destination = null
+                    destinationSurface = null
+                    destinationWidth = 0
+                    destinationHeight = 0
+                }
+                return
+            }
+
             val safeWidth = width.coerceAtLeast(1)
             val safeHeight = height.coerceAtLeast(1)
 
-            if (destination != null && destinationWidth == safeWidth && destinationHeight == safeHeight) {
+            if (
+                destination != null &&
+                destinationSurface === previewSurface &&
+                destinationWidth == safeWidth &&
+                destinationHeight == safeHeight
+            ) {
                 return
             }
 
@@ -542,12 +592,7 @@ private class FanoutPreviewDestinationRegistry(
                 runtime.unregisterPreviewDestination(currentDestination)
                 currentDestination.release()
                 destination = null
-                surfaceTexture?.release()
-                surfaceTexture = null
-            }
-
-            val nextTexture = SurfaceTexture(0).also {
-                it.setDefaultBufferSize(safeWidth, safeHeight)
+                destinationSurface = null
             }
             val nextDestination = PreviewSurfaceGlDestination(
                 CameraGlFanoutOutputSpec(
@@ -555,14 +600,14 @@ private class FanoutPreviewDestinationRegistry(
                     width = safeWidth,
                     height = safeHeight,
                 ),
-                Surface(nextTexture),
+                previewSurface,
                 createEglSurface = { surface ->
                     destinationSurfaceFactory.get().invoke(surface)
                 },
             )
 
             runtime.registerPreviewDestination(nextDestination)
-            this.surfaceTexture = nextTexture
+            this.destinationSurface = previewSurface
             this.destination = nextDestination
             this.destinationWidth = safeWidth
             this.destinationHeight = safeHeight
@@ -578,9 +623,8 @@ private class FanoutPreviewDestinationRegistry(
 
             runtime.unregisterPreviewDestination(currentDestination)
             currentDestination.release()
-            surfaceTexture?.release()
             destination = null
-            surfaceTexture = null
+            destinationSurface = null
             destinationWidth = 0
             destinationHeight = 0
         }

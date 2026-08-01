@@ -76,7 +76,9 @@ class CameraGlFanoutPipeline {
     }
 
     fun stop() {
-        ensureNotReleased()
+        if (released || !started) {
+            return
+        }
         started = false
     }
 

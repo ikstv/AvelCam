@@ -59,9 +59,21 @@ class CameraGlFanoutController(
     }
 
     fun stop() : Result<Unit> {
-        val stopResult = outputManager?.stop() ?: Result.success(Unit)
-        coordinator.stop()
-        return stopResult
+        return try {
+            val outputStopResult = outputManager?.stop() ?: Result.success(Unit)
+            try {
+                coordinator.stop()
+                outputManager = null
+            } finally {
+                if (outputManager == null) {
+                    outputManager = null
+                }
+            }
+            outputStopResult
+        } catch (error: Throwable) {
+            outputManager = null
+            Result.failure(error)
+        }
     }
 
     fun release() {

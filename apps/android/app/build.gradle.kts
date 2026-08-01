@@ -7,7 +7,7 @@ android {
     namespace = "com.avelcam.android"
     compileSdk = 35
     val enableEglInputSurface = providers.gradleProperty("avelcamEnableEglInputSurface")
-        .orElse("false")
+.orElse("false")
         .get()
         .toBoolean()
 
@@ -76,3 +76,4 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
+

@@ -2,6 +2,7 @@ package com.avelcam.android.camera.pipeline.surface
 import androidx.camera.core.Preview
 import androidx.camera.core.SurfaceRequest
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal class CameraSurfaceProvider(
@@ -23,7 +24,23 @@ internal class CameraSurfaceProvider(
     private var activeRequest: ActiveSurfaceRequest? = null
 
     override fun onSurfaceRequested(surfaceRequest: SurfaceRequest) {
-        callbackExecutor.execute { handleSurfaceRequest(requestAdapterProvider(surfaceRequest)) }
+        val request = requestAdapterProvider(surfaceRequest)
+        if (released.get()) {
+            request.willNotProvideSurface()
+            return
+        }
+
+        try {
+            callbackExecutor.execute {
+                if (released.get()) {
+                    request.willNotProvideSurface()
+                } else {
+                    handleSurfaceRequest(request)
+                }
+            }
+        } catch (_: RejectedExecutionException) {
+            request.willNotProvideSurface()
+        }
     }
 
     internal fun handleSurfaceRequest(surfaceRequest: CameraSurfaceRequest) {
