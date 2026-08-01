@@ -145,4 +145,17 @@ class CameraGlFanoutPipelineTest {
             assertEquals("Fanout pipeline is not started.", expected.message)
         }
     }
+
+    @Test
+    fun sourceTextureIdIsValidatedAndPreserved() {
+        val texturedFrame = frame.copy(sourceTextureId = 42)
+        assertEquals(42, texturedFrame.sourceTextureId)
+
+        try {
+            frame.copy(sourceTextureId = -1)
+            fail("Expected IllegalArgumentException")
+        } catch (expected: IllegalArgumentException) {
+            assertEquals("sourceTextureId must be >= 0.", expected.message)
+        }
+    }
 }

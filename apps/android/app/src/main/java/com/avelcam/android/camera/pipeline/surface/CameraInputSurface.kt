@@ -42,6 +42,9 @@ internal class CameraInputSurface internal constructor(
         require(resolution.width > 0 && resolution.height > 0) {
             "Surface resolution must be positive."
         }
+        require(sourceTextureId >= 0) {
+            "Source texture id must be >= 0."
+        }
     }
 
     internal fun isReleased(): Boolean = isReleased.get()
