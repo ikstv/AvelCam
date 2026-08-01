@@ -30,7 +30,6 @@ import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFailure
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactory
-import com.avelcam.android.camera.pipeline.surface.CameraSurfaceProvider
 import com.avelcam.android.camera.pipeline.surface.CameraSurfaceRequestResolution
 import com.avelcam.android.camera.pipeline.surface.DefaultCameraInputSurfaceFactory
 import java.util.concurrent.Executor
@@ -159,20 +158,6 @@ private fun bindPreview(
             frameBridge.start()
         }
 
-        val surfaceProvider = CameraSurfaceProvider(
-            callbackExecutor = analysisExecutor,
-            surfaceFactory = surfaceFactory,
-            requestStateObserver = { _ -> },
-            requestResultObserver = { _, result, _, isFatal ->
-                if (isFatal) {
-                    onRuntimeError("Camera surface request failed: $result")
-                }
-            },
-            transformationObserver = { _, transformation ->
-                frameBridge.updateSurfaceRotation(transformation.rotationDegrees)
-            },
-        )
-
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
@@ -197,7 +182,6 @@ private fun bindPreview(
             selector,
             preview,
             imageAnalysis,
-            surfaceProvider,
         )
         onError(null)
     } catch (error: Exception) {
@@ -401,7 +385,6 @@ private class FanoutSurfaceFrameBridge(
                     isFrontCamera = isFrontCamera,
                     surfaceTextureTransformMatrix = latestSurfaceTransform.copyOf(),
                 ),
-                sourceTextureId = texture.textureName,
             )
         } finally {
             frameCoalescer.onRenderCompleted()
@@ -498,7 +481,12 @@ private class FanoutCameraInputSurfaceFactory(
             delegate.create(resolution)
         } catch (failure: CameraInputSurfaceFailure) {
             throw failure
-        }
+        } as? CameraInputSurface ?: throw CameraInputSurfaceFailure.AllocationFailure(
+            width = resolution.width,
+            height = resolution.height,
+            reason = "Surface factory did not return CameraInputSurface.",
+            failure = IllegalStateException("Surface factory did not return CameraInputSurface."),
+        )
         onSurfaceCreated?.invoke(surface)
         lastSurface = surface
         return surface
