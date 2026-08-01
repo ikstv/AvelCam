@@ -27,13 +27,18 @@ internal class CameraInputSurfaceFactoryOwner private constructor(
                 )
                 CameraInputSurfaceMode.EGL -> {
                     val eglContext = GlFanoutEglContext()
-                    CameraInputSurfaceFactoryOwner(
-                        factory = CameraInputSurfaceFactorySelector.create(
-                            mode = CameraInputSurfaceMode.EGL,
-                            eglContext = eglContext,
-                        ),
-                        closeAction = eglContext::close,
-                    )
+                    try {
+                        CameraInputSurfaceFactoryOwner(
+                            factory = CameraInputSurfaceFactorySelector.create(
+                                mode = CameraInputSurfaceMode.EGL,
+                                eglContext = eglContext,
+                            ),
+                            closeAction = eglContext::close,
+                        )
+                    } catch (error: Throwable) {
+                        eglContext.close()
+                        throw error
+                    }
                 }
             }
         }
