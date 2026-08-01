@@ -196,19 +196,6 @@ private fun bindPreview(
             return
         }
 
-        val surfaceProvider = CameraSurfaceProvider(
-            callbackExecutor = analysisExecutor,
-            surfaceFactory = surfaceFactory,
-            transformationObserver = { _, transform ->
-                frameBridge.updateSurfaceRotation(transform.rotationDegrees)
-            },
-        )
-        onSurfaceProviderCreated(surfaceProvider)
-
-        val preview = androidx.camera.core.Preview.Builder().build().also {
-            it.setSurfaceProvider(surfaceProvider)
-        }
-
         val surfaceFactoryOwner = runCatching {
             CameraInputSurfaceFactoryOwner.create(cameraInputSurfaceMode)
         }.getOrElse { error ->
@@ -223,6 +210,20 @@ private fun bindPreview(
         }
         val surfaceFactory = surfaceFactoryOwner.factory
         onSurfaceFactoryOwnerCreated(surfaceFactoryOwner)
+
+        val surfaceProvider = CameraSurfaceProvider(
+            callbackExecutor = analysisExecutor,
+            surfaceFactory = surfaceFactory,
+            transformationObserver = { _, transform ->
+                frameBridge.updateSurfaceRotation(transform.rotationDegrees)
+            },
+        )
+        onSurfaceProviderCreated(surfaceProvider)
+
+        val preview = androidx.camera.core.Preview.Builder().build().also {
+            it.setSurfaceProvider(surfaceProvider)
+        }
+
         surfaceFactory.setListener { surface ->
             frameBridge.bindSurface(surface, selectedLens == CameraSelector.LENS_FACING_FRONT)
             frameBridge.start()
