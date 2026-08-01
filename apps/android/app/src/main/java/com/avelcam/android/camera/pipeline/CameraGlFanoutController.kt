@@ -18,10 +18,9 @@ class CameraGlFanoutController(
         sink: EncodedFrameSink,
         frontCameraEncoderMirrored: Boolean
     ) -> CameraEncoderOutputManagerContract = { coord, config, sink, _ ->
-        CameraEncoderOutputManager(config, sink, coord)
+        CameraEncoderOutputManager(config, sink, coord).asContract
     },
     private val outputSink: EncodedFrameSink = NoopEncodedFrameSink(),
-    private val onEncodedAccessUnit: (String) -> Unit = {},
 ) {
     private var configured = false
     private var outputManager: CameraEncoderOutputManagerContract? = null
@@ -39,8 +38,8 @@ class CameraGlFanoutController(
         outputManager = outputManagerFactory(
             coordinator,
             config.encoderConfig,
-            sink = outputSink,
-            frontCameraEncoderMirrored = config.frontCameraEncoderMirrored
+            outputSink,
+            config.frontCameraEncoderMirrored
         )
         configured = true
     }
