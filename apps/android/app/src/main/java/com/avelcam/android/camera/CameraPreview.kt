@@ -2,6 +2,7 @@ package com.avelcam.android.camera
 
 import android.content.Context
 import android.graphics.SurfaceTexture
+import android.util.Log
 import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -12,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -49,6 +52,8 @@ internal fun CameraPreview(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var effectiveCameraInputSurfaceMode by remember { mutableStateOf(cameraInputSurfaceMode) }
+    var fallbackScheduled by remember { mutableStateOf(false) }
     val previewView = remember {
         PreviewView(context).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
@@ -83,12 +88,17 @@ internal fun CameraPreview(
     }
     val latestOnError by rememberUpdatedState(onError)
 
+    androidx.compose.runtime.LaunchedEffect(cameraInputSurfaceMode) {
+        effectiveCameraInputSurfaceMode = cameraInputSurfaceMode
+        fallbackScheduled = false
+    }
+
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { previewView }
     )
 
-    DisposableEffect(selectedLens, lifecycleOwner, cameraInputSurfaceMode) {
+    DisposableEffect(selectedLens, lifecycleOwner, effectiveCameraInputSurfaceMode) {
         var disposed = false
         val providerFuture = ProcessCameraProvider.getInstance(context)
         val mainExecutor = ContextCompat.getMainExecutor(context)
@@ -126,9 +136,23 @@ internal fun CameraPreview(
                     onSurfaceProviderCreated = { provider ->
                         surfaceProvider = provider
                     },
-                    cameraInputSurfaceMode = cameraInputSurfaceMode,
+                    cameraInputSurfaceMode = effectiveCameraInputSurfaceMode,
                     onRuntimeError = { message ->
-                        latestOnError(message)
+                        if (
+                            !fallbackScheduled &&
+                            effectiveCameraInputSurfaceMode == CameraInputSurfaceMode.EGL &&
+                            message.startsWith("RUNTIME_START_FAILED")
+                        ) {
+                            fallbackScheduled = true
+                            runtime.stop()
+                            runtime.release()
+                            effectiveCameraInputSurfaceMode = CameraInputSurfaceMode.DEFAULT
+                            latestOnError(
+                                "EGL camera input path failed to start. Switched to default preview mode."
+                            )
+                        } else {
+                            latestOnError(message)
+                        }
                     },
                 )
             },
@@ -181,6 +205,7 @@ private fun bindPreview(
         onAvailabilityUpdated(hasRear, hasFront)
 
         if (!hasRear && !hasFront) {
+            Log.e("AvelCamCamera", "bindPreview: no camera devices available")
             onError("No camera devices are available.")
             return
         }
@@ -192,6 +217,7 @@ private fun bindPreview(
         }
 
         if (!provider.hasCamera(selector)) {
+            Log.e("AvelCamCamera", "bindPreview: selected camera not available; selectedLens=$selectedLens")
             onError("Selected camera is not available.")
             return
         }
@@ -280,7 +306,6 @@ private class FanoutFrameAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         try {
-            previewDestination.ensureDestinationRegistered(runtime, image.width, image.height)
             val metadata = CameraFrameMetadata(
                 sourceTimestampNs = normalizeTimestamp(image.imageInfo.timestamp),
                 mappedTimestampNs = 0L,
@@ -288,7 +313,9 @@ private class FanoutFrameAnalyzer(
                 isFrontCamera = selectedLens == CameraSelector.LENS_FACING_FRONT,
                 surfaceTextureTransformMatrix = IDENTITY_SURFACE_TEXTURE_MATRIX,
             )
+            ensureRuntimeRunning(image.width, image.height)
             onMetadata(metadata)
+            previewDestination.ensureDestinationRegistered(runtime, image.width, image.height)
 
             synchronized(lock) {
                 latestFrame = CameraGlFanoutFramePayload(
@@ -328,6 +355,7 @@ private class FanoutFrameAnalyzer(
     private fun ensureRuntimeRunning(sourceWidth: Int, sourceHeight: Int) {
         synchronized(lock) {
             if (!runtime.isConfigured()) {
+                Log.d("AvelCamCamera", "configure runtime for frame=${sourceWidth}x$sourceHeight")
                 runtime.configure(
                     CameraGlFanoutRuntimeConfig(
                         cameraWidth = sourceWidth,
@@ -345,8 +373,17 @@ private class FanoutFrameAnalyzer(
             if (!runtime.isRunning()) {
                 val startResult = runtime.start()
                 if (startResult.isFailure) {
-                    throw startResult.exceptionOrNull() ?: IllegalStateException("Runtime failed to start.")
+                    Log.e(
+                        "AvelCamCamera",
+                        "runtime.start failed for ${sourceWidth}x$sourceHeight: ${
+                            startResult.exceptionOrNull()?.message ?: "Runtime failed to start."
+                        }"
+                    )
+                    throw IllegalStateException(
+                        "RUNTIME_START_FAILED: ${startResult.exceptionOrNull()?.message ?: "Runtime failed to start."}"
+                    )
                 }
+                Log.d("AvelCamCamera", "runtime started for ${sourceWidth}x$sourceHeight")
             }
         }
     }
