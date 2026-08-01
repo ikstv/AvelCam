@@ -28,10 +28,7 @@ import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
 import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
-import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFailure
-import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactory
-import com.avelcam.android.camera.pipeline.surface.CameraSurfaceRequestResolution
-import com.avelcam.android.camera.pipeline.surface.DefaultCameraInputSurfaceFactory
+import com.avelcam.android.camera.pipeline.surface.ObservableCameraInputSurfaceFactory
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -64,7 +61,7 @@ fun CameraPreview(
         val previewDestination = FanoutPreviewDestinationRegistry()
         val frameBridge = FanoutSurfaceFrameBridge(runtime = runtime, analysisExecutor = analysisExecutor)
         var frameAnalyzer: FanoutFrameAnalyzer? = null
-        var surfaceInputFactory: FanoutCameraInputSurfaceFactory? = null
+        var surfaceInputFactory: ObservableCameraInputSurfaceFactory? = null
 
         providerFuture.addListener(
             {
@@ -122,7 +119,7 @@ private fun bindPreview(
     previewDestination: FanoutPreviewDestinationRegistry,
     frameBridge: FanoutSurfaceFrameBridge,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
-    onSurfaceFactoryCreated: (FanoutCameraInputSurfaceFactory) -> Unit,
+    onSurfaceFactoryCreated: (ObservableCameraInputSurfaceFactory) -> Unit,
     onRuntimeError: (String) -> Unit,
 ) {
     try {
@@ -151,7 +148,7 @@ private fun bindPreview(
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
-        val surfaceFactory = FanoutCameraInputSurfaceFactory()
+        val surfaceFactory = ObservableCameraInputSurfaceFactory()
         onSurfaceFactoryCreated(surfaceFactory)
         surfaceFactory.setListener { surface ->
             frameBridge.bindSurface(surface, selectedLens == CameraSelector.LENS_FACING_FRONT)
@@ -471,39 +468,6 @@ private class FanoutPreviewDestinationRegistry {
             destinationWidth = 0
             destinationHeight = 0
         }
-    }
-}
-
-private class FanoutCameraInputSurfaceFactory(
-    private val delegate: CameraInputSurfaceFactory = DefaultCameraInputSurfaceFactory(),
-) : CameraInputSurfaceFactory {
-    private var onSurfaceCreated: ((CameraInputSurface) -> Unit)? = null
-    private var lastSurface: CameraInputSurface? = null
-
-    override fun create(resolution: CameraSurfaceRequestResolution): CameraInputSurface {
-        val surface = try {
-            delegate.create(resolution)
-        } catch (failure: CameraInputSurfaceFailure) {
-            throw failure
-        } as? CameraInputSurface ?: throw CameraInputSurfaceFailure.AllocationFailure(
-            width = resolution.width,
-            height = resolution.height,
-            reason = "Surface factory did not return CameraInputSurface.",
-            failure = IllegalStateException("Surface factory did not return CameraInputSurface."),
-        )
-        onSurfaceCreated?.invoke(surface)
-        lastSurface = surface
-        return surface
-    }
-
-    fun setListener(listener: (CameraInputSurface) -> Unit) {
-        onSurfaceCreated = listener
-        lastSurface?.let(listener)
-    }
-
-    fun clearSurface() {
-        lastSurface?.release()
-        lastSurface = null
     }
 }
 

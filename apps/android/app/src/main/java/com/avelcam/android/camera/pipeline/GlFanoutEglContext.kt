@@ -4,6 +4,7 @@ import android.opengl.EGLSurface
 import android.view.Surface
 import com.avelcam.android.camera.pipeline.surface.EglCameraInputSurfaceFactory
 import com.avelcam.android.camera.pipeline.surface.ExternalOesTexture
+import com.avelcam.android.camera.pipeline.surface.ObservableCameraInputSurfaceFactory
 import com.avelcam.android.encoder.gl.EglCore
 import com.avelcam.android.encoder.gl.EglInputSurface
 
@@ -24,6 +25,12 @@ internal class GlFanoutEglContext : AutoCloseable {
             externalTextureFactory = {
                 runWithContext { ExternalOesTexture.create() }
             }
+        )
+    }
+
+    fun createObservableCameraInputSurfaceFactory(): ObservableCameraInputSurfaceFactory {
+        return ObservableCameraInputSurfaceFactory(
+            delegate = createCameraInputSurfaceFactory()
         )
     }
 
