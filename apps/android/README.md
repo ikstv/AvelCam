@@ -45,6 +45,10 @@ Current default config:
 - Bitrate: `4_000_000`
 - I-frame interval: `1`
 - Surface input (`MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface`)
+- Camera input surface mode:
+  - Default: legacy `SurfaceTexture` path (`-PavelcamEnableEglInputSurface=false`)
+  - EGL + camera texture path: `-PavelcamEnableEglInputSurface=true`
+  - If EGL path initialization fails, app falls back to the default mode automatically.
 
 ## How to run tests
 
@@ -69,6 +73,20 @@ Instrumented tests are optional and expected to run on a compatible device.
 ```bash
 cd apps/android
 ./gradlew.bat assembleDebug
+```
+
+To force EGL-backed camera input surface on debug builds:
+
+```bash
+cd apps/android
+./gradlew.bat assembleDebug -PavelcamEnableEglInputSurface=true
+```
+
+To force default mode explicitly:
+
+```bash
+cd apps/android
+./gradlew.bat assembleDebug -PavelcamEnableEglInputSurface=false
 ```
 
 ## Current limitations

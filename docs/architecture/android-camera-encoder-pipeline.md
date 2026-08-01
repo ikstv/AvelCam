@@ -153,6 +153,20 @@ This implementation intentionally excludes:
 * OBS plugin
 * MP4 recording
 
+## Camera input surface mode switch
+
+The encoder/input surface behavior can be switched at build time:
+
+- `-PavelcamEnableEglInputSurface=true` enables the EGL/SurfaceTexture path.
+- `-PavelcamEnableEglInputSurface=false` forces legacy/default mode.
+- If EGL mode is requested but cannot be created, the pipeline automatically falls back to default mode and continues preview/encoding operation without a fatal failure.
+
+For repeatable physical-device checks use:
+
+```bash
+./gradlew.bat assembleDebug -PavelcamEnableEglInputSurface=true
+```
+
 ## Reference architecture
 
 ```text
