@@ -2,6 +2,7 @@ package com.avelcam.android.camera
 
 import android.content.Context
 import android.graphics.SurfaceTexture
+import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
