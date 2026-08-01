@@ -318,7 +318,7 @@ private class FanoutSurfaceFrameBridge(
     private val frameCoalescer = CameraFrameCoalescer { analysisExecutor.execute { onFrameAvailable() } }
     private var activeSurfaceTexture: SurfaceTexture? = null
     private var latestMetadata: CameraFrameMetadata? = null
-    private val latestSurfaceTransform: FloatArray = IDENTITY_SURFACE_TEXTURE_MATRIX.copyOf()
+    private var latestSurfaceTransform: FloatArray = IDENTITY_SURFACE_TEXTURE_MATRIX.copyOf()
     private var lastSourceWidth: Int = 0
     private var lastSourceHeight: Int = 0
     private var isFrontCamera: Boolean = false
@@ -331,7 +331,11 @@ private class FanoutSurfaceFrameBridge(
             lastSourceWidth = surface.resolution.width
             lastSourceHeight = surface.resolution.height
             activeSurfaceTexture?.setOnFrameAvailableListener {
-                activeSurfaceTexture?.getTransformMatrix(latestSurfaceTransform)
+                val nextTransform = FloatArray(16)
+                activeSurfaceTexture?.getTransformMatrix(nextTransform)
+                synchronized(lock) {
+                    latestSurfaceTransform = nextTransform
+                }
                 frameCoalescer.onFrameAvailable()
             }
         }
@@ -339,7 +343,14 @@ private class FanoutSurfaceFrameBridge(
 
     fun updateMetadata(metadata: CameraFrameMetadata) {
         synchronized(lock) {
-            latestMetadata = metadata
+            val surfaceTransform = latestSurfaceTransform.copyOf()
+            latestMetadata = CameraFrameMetadata(
+                sourceTimestampNs = metadata.sourceTimestampNs,
+                mappedTimestampNs = metadata.mappedTimestampNs,
+                rotationDegrees = metadata.rotationDegrees,
+                isFrontCamera = metadata.isFrontCamera,
+                surfaceTextureTransformMatrix = surfaceTransform,
+            )
         }
     }
 
