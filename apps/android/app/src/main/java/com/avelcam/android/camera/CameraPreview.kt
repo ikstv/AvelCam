@@ -57,6 +57,7 @@ fun CameraPreview(
         val executor = ContextCompat.getMainExecutor(context)
         val analysisExecutor = Executors.newSingleThreadExecutor()
         val previewDestination = FanoutPreviewDestinationRegistry()
+        var frameAnalyzer: FanoutFrameAnalyzer? = null
 
         providerFuture.addListener(
             {
@@ -71,6 +72,7 @@ fun CameraPreview(
                     runtime = runtime,
                     analysisExecutor = analysisExecutor,
                     previewDestination = previewDestination,
+                    onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
                     onRuntimeError = { message ->
                         latestOnError(message)
                     },
@@ -82,6 +84,8 @@ fun CameraPreview(
         onDispose {
             disposed = true
             runtime.stop()
+            frameAnalyzer?.release()
+            frameAnalyzer = null
             previewDestination.release(runtime)
             runtime.release()
             analysisExecutor.shutdown()
@@ -105,6 +109,7 @@ private fun bindPreview(
     runtime: CameraGlFanoutRuntime,
     analysisExecutor: Executor,
     previewDestination: FanoutPreviewDestinationRegistry,
+    onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
     onRuntimeError: (String) -> Unit,
 ) {
     try {
@@ -137,13 +142,15 @@ private fun bindPreview(
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
             .also {
-                it.setAnalyzer(analysisExecutor, FanoutFrameAnalyzer(
+                val analyzer = FanoutFrameAnalyzer(
                     selectedLens = selectedLens,
                     runtime = runtime,
                     previewDestination = previewDestination,
                     onError = onRuntimeError,
                     analysisExecutor = analysisExecutor,
-                ))
+                )
+                onAnalyzerCreated(analyzer)
+                it.setAnalyzer(analysisExecutor, analyzer)
             }
 
         provider.unbindAll()
@@ -220,6 +227,10 @@ private class FanoutFrameAnalyzer(
         } finally {
             frameCoalescer.onRenderCompleted()
         }
+    }
+
+    fun release() {
+        frameCoalescer.release()
     }
 
     private fun ensureRuntimeRunning(sourceWidth: Int, sourceHeight: Int) {
@@ -329,4 +340,3 @@ private class FanoutPreviewDestinationRegistry {
 }
 
 private val IDENTITY_SURFACE_TEXTURE_MATRIX = FloatArray(16) { index -> if (index % 5 == 0) 1f else 0f }
-
