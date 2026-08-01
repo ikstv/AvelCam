@@ -69,7 +69,6 @@ class CameraGlFanoutControllerTest {
 
     @Test
     fun frameIgnoredBeforeStart() {
-        var frameRenderCalls = 0
         val controller = CameraGlFanoutController(
             coordinator = CameraGlFanoutCoordinator(),
             outputManagerFactory = { _, _, _, _ ->
@@ -82,6 +81,35 @@ class CameraGlFanoutControllerTest {
         controller.onCameraFrame(1920, 1080, metadata)
 
         assertTrue(controller.snapshot().coordinator.pipelineSummary.framesSeen == 0L)
+    }
+
+    @Test
+    fun previewDestinationCanBeRegisteredAndUnregistered() {
+        val preview = object : CameraGlFanoutDestination {
+            override val spec: CameraGlFanoutOutputSpec = CameraGlFanoutOutputSpec(
+                role = CameraGlFanoutOutputRole.PREVIEW,
+                width = 640,
+                height = 480
+            )
+            var calls = 0
+            override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
+                calls++
+                return CameraGlFanoutRenderResult(spec.role, rendered = true)
+            }
+            override fun release() {}
+        }
+
+        val coordinator = CameraGlFanoutCoordinator()
+        val controller = CameraGlFanoutController(
+            coordinator = coordinator,
+            outputManagerFactory = { _, _, _, _ -> FakeEncoderOutputManager() }
+        )
+        controller.configure(controllerConfig)
+        controller.registerPreviewDestination(preview)
+        assertEquals(1, coordinator.snapshot().destinationsRegistered)
+
+        controller.unregisterPreviewDestination(preview)
+        assertEquals(0, coordinator.snapshot().destinationsRegistered)
     }
 
     @Test

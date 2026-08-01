@@ -82,6 +82,15 @@ class CameraGlFanoutController(
         coordinator.onCameraFrame(sourceWidth, sourceHeight, metadata)
     }
 
+    fun registerPreviewDestination(destination: CameraGlFanoutDestination) {
+        ensureConfigured()
+        coordinator.registerDestination(destination)
+    }
+
+    fun unregisterPreviewDestination(destination: CameraGlFanoutDestination) {
+        coordinator.unregisterDestination(destination)
+    }
+
     fun snapshot(): CameraGlFanoutControllerSnapshot {
         return CameraGlFanoutControllerSnapshot(
             configured = configured,
