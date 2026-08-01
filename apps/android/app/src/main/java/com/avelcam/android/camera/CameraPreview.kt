@@ -402,8 +402,6 @@ private class FanoutSurfaceFrameBridge(
                     surfaceTextureTransformMatrix = latestSurfaceTransform.copyOf(),
                 ),
             )
-        } catch (_: Throwable) {
-            frameCoalescer.onRenderCompleted()
         } finally {
             frameCoalescer.onRenderCompleted()
         }
