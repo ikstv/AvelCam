@@ -37,6 +37,25 @@ The device serial, raw logcat, APK, and local paths are intentionally excluded f
 
 The physical suite passed before the final documentation-only and variable-renaming edits. A final repeat installation was blocked by Android with `INSTALL_FAILED_USER_RESTRICTED` because installation was cancelled on the device, so no tests started in that repeat. This is a device authorization condition, not a test or application failure; it must be retried after installation is allowed on the phone before a merge gate is considered fully fresh.
 
+### Update 2026-08-01 (local continuation on-device run)
+
+- Rebuilt on branch `feat/android-camera-encoder-pipeline` with `-PavelcamEnableEglInputSurface=true` and produced:
+  - `C:\AI\AvelCam\apps\android\app\build\outputs\apk\debug\app-debug.apk`
+  - `BUILD SUCCESSFUL`
+- Installed on device `Q4OJSWUC4PYTZHRG`:
+  - `Success` (ADB install return)
+- Launched app:
+  - `am start -W -n com.avelcam.android/com.avelcam.android.MainActivity`
+  - `Status: ok`, `LaunchState: COLD`
+- Device-visible runtime evidence from `logcat -d` (filtered for CameraX/Runtime/Codec tags):
+  - Camera lifecycle transitions and `CameraDevice.onOpened()` observed
+  - `Camera2CameraImpl` use cases active/detach events present
+  - No `FATAL EXCEPTION` / `AndroidRuntime` crash markers in this specific run
+- Limitation:
+  - No scripted interaction was executed to verify front/rear switch, rotation, background/foreground resume, or encoder output counters in this run.
+- Revalidation status unchanged:
+  - `Phase 3 remains in development` until end-to-end fan-out and encoder output checks are completed in a dedicated on-device smoke protocol.
+
 ## Corrections made during audit
 
 - Fixed a Kotlin smart-cast compilation error when unregistering the preview destination.
