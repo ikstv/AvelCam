@@ -55,7 +55,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-private const val ENABLE_EGL_CAMERA_INPUT_SURFACE = false
+private const val ENABLE_EGL_CAMERA_INPUT_SURFACE = BuildConfig.ENABLE_EGL_CAMERA_INPUT_SURFACE
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

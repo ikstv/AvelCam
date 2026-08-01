@@ -6,6 +6,10 @@ plugins {
 android {
     namespace = "com.avelcam.android"
     compileSdk = 35
+    val enableEglInputSurface = providers.gradleProperty("avelcamEnableEglInputSurface")
+        .orElse("false")
+        .get()
+        .toBoolean()
 
     defaultConfig {
         applicationId = "com.avelcam.android"
@@ -15,6 +19,7 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "ENABLE_EGL_CAMERA_INPUT_SURFACE", enableEglInputSurface.toString())
     }
 
     buildTypes {
