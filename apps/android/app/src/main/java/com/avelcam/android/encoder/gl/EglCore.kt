@@ -1,15 +1,17 @@
 package com.avelcam.android.encoder.gl
 
 import android.opengl.EGL14
-import android.opengl.EGLExt
-import android.opengl.EGLContext
 import android.opengl.EGLConfig
+import android.opengl.EGLContext
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
+import android.opengl.EGLExt
 import android.view.Surface
 import java.util.Arrays
 
-class EglCore {
+class EglCore(
+    private val sharedContext: EGLContext = EGL14.EGL_NO_CONTEXT,
+) {
     private val eglDisplay: EGLDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
     private val config: EGLConfig
     private val eglContext: android.opengl.EGLContext
@@ -49,7 +51,7 @@ class EglCore {
         eglContext = EGL14.eglCreateContext(
             eglDisplay,
             config,
-            EGL14.EGL_NO_CONTEXT,
+            sharedContext,
             ctxAttribs,
             0
         )
@@ -57,6 +59,8 @@ class EglCore {
             throw IllegalStateException("Failed to create EGL context.")
         }
     }
+
+    fun getEglContext(): EGLContext = eglContext
 
     fun createWindowSurface(surface: Surface): android.opengl.EGLSurface {
         return EGL14.eglCreateWindowSurface(eglDisplay, config, surface, intArrayOf(EGL14.EGL_NONE), 0)

@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class EncoderSurfaceGlDestination(
     override val spec: CameraGlFanoutOutputSpec,
     surface: Surface,
+    createEglSurface: (Surface) -> EglInputSurface = { EglInputSurface(it) },
 ) : CameraGlFanoutDestination {
 
     init {
@@ -18,7 +19,7 @@ class EncoderSurfaceGlDestination(
         require(spec.height > 0) { "Destination height must be > 0." }
     }
 
-    private val eglSurface = EglInputSurface(surface)
+    private val eglSurface = createEglSurface(surface)
     private val isReleased = AtomicBoolean(false)
 
     override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {

@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PreviewSurfaceGlDestination(
     override val spec: CameraGlFanoutOutputSpec,
     surface: Surface,
+    createEglSurface: (Surface) -> EglInputSurface = { EglInputSurface(it) },
 ) : CameraGlFanoutDestination {
     init {
         require(spec.role == CameraGlFanoutOutputRole.PREVIEW) {
@@ -17,7 +18,7 @@ class PreviewSurfaceGlDestination(
         require(spec.height > 0) { "Destination height must be > 0." }
     }
 
-    private val eglSurface = EglInputSurface(surface)
+    private val eglSurface = createEglSurface(surface)
     private val previewRenderer = PreviewGlRenderer()
     private val isReleased = AtomicBoolean(false)
 
