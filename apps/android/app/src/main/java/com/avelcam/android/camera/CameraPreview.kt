@@ -1,6 +1,8 @@
 package com.avelcam.android.camera
 
 import android.content.Context
+import android.graphics.SurfaceTexture
+import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -21,6 +23,9 @@ import androidx.lifecycle.LifecycleOwner
 import com.avelcam.android.camera.pipeline.CameraFrameMetadata
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntime
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntimeConfig
+import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
+import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
+import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -50,6 +55,7 @@ fun CameraPreview(
         val providerFuture = ProcessCameraProvider.getInstance(context)
         val executor = ContextCompat.getMainExecutor(context)
         val analysisExecutor = Executors.newSingleThreadExecutor()
+        val previewDestination = FanoutPreviewDestinationRegistry()
 
         providerFuture.addListener(
             {
@@ -63,6 +69,7 @@ fun CameraPreview(
                     onError = onError,
                     runtime = runtime,
                     analysisExecutor = analysisExecutor,
+                    previewDestination = previewDestination,
                     onRuntimeError = { message ->
                         latestOnError(message)
                     },
@@ -74,6 +81,7 @@ fun CameraPreview(
         onDispose {
             disposed = true
             runtime.stop()
+            previewDestination.release(runtime)
             runtime.release()
             analysisExecutor.shutdown()
             if (providerFuture.isDone) {
@@ -95,6 +103,7 @@ private fun bindPreview(
     onError: (String?) -> Unit,
     runtime: CameraGlFanoutRuntime,
     analysisExecutor: Executor,
+    previewDestination: FanoutPreviewDestinationRegistry,
     onRuntimeError: (String) -> Unit,
 ) {
     try {
@@ -130,6 +139,7 @@ private fun bindPreview(
                 it.setAnalyzer(analysisExecutor, FanoutFrameAnalyzer(
                     selectedLens = selectedLens,
                     runtime = runtime,
+                    previewDestination = previewDestination,
                     onError = onRuntimeError,
                 ))
             }
@@ -150,6 +160,7 @@ private fun bindPreview(
 private class FanoutFrameAnalyzer(
     private val selectedLens: Int,
     private val runtime: CameraGlFanoutRuntime,
+    private val previewDestination: FanoutPreviewDestinationRegistry,
     private val onError: (String) -> Unit,
 ) : ImageAnalysis.Analyzer {
     private val lock = Any()
@@ -157,6 +168,8 @@ private class FanoutFrameAnalyzer(
     override fun analyze(image: ImageProxy) {
         try {
             ensureRuntimeRunning(image.width, image.height)
+            previewDestination.ensureDestinationRegistered(runtime, image.width, image.height)
+
             runtime.onCameraFrame(
                 sourceWidth = image.width,
                 sourceHeight = image.height,
@@ -218,4 +231,57 @@ private class FanoutFrameAnalyzer(
     }
 }
 
+private class FanoutPreviewDestinationRegistry {
+    private val lock = Any()
+    private var surfaceTexture: SurfaceTexture? = null
+    private var surface: Surface? = null
+    private var destination: PreviewSurfaceGlDestination? = null
+
+    fun ensureDestinationRegistered(runtime: CameraGlFanoutRuntime, width: Int, height: Int) {
+        synchronized(lock) {
+            if (destination != null) {
+                return
+            }
+
+            val safeWidth = width.coerceAtLeast(1)
+            val safeHeight = height.coerceAtLeast(1)
+            val nextTexture = SurfaceTexture(0).also {
+                it.setDefaultBufferSize(safeWidth, safeHeight)
+            }
+            val nextSurface = Surface(nextTexture)
+            val nextDestination = PreviewSurfaceGlDestination(
+                CameraGlFanoutOutputSpec(
+                    role = CameraGlFanoutOutputRole.PREVIEW,
+                    width = safeWidth,
+                    height = safeHeight,
+                ),
+                nextSurface
+            )
+
+            runtime.registerPreviewDestination(nextDestination)
+            this.surfaceTexture = nextTexture
+            this.surface = nextSurface
+            this.destination = nextDestination
+        }
+    }
+
+    fun release(runtime: CameraGlFanoutRuntime) {
+        synchronized(lock) {
+            val currentDestination = destination
+            if (currentDestination == null) {
+                return
+            }
+
+            runtime.unregisterPreviewDestination(currentDestination)
+            currentDestination.release()
+            surfaceTexture?.release()
+            surface?.release()
+            destination = null
+            surfaceTexture = null
+            surface = null
+        }
+    }
+}
+
 private val IDENTITY_SURFACE_TEXTURE_MATRIX = FloatArray(16) { index -> if (index % 5 == 0) 1f else 0f }
+
