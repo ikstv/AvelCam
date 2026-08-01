@@ -152,6 +152,8 @@ private class FanoutFrameAnalyzer(
     private val runtime: CameraGlFanoutRuntime,
     private val onError: (String) -> Unit,
 ) : ImageAnalysis.Analyzer {
+    private val lock = Any()
+
     override fun analyze(image: ImageProxy) {
         try {
             ensureRuntimeRunning(image.width, image.height)
@@ -174,25 +176,27 @@ private class FanoutFrameAnalyzer(
     }
 
     private fun ensureRuntimeRunning(sourceWidth: Int, sourceHeight: Int) {
-        if (!runtime.isConfigured()) {
-            runtime.configure(
-                CameraGlFanoutRuntimeConfig(
-                    cameraWidth = sourceWidth,
-                    cameraHeight = sourceHeight,
-                    previewWidth = sourceWidth,
-                    previewHeight = sourceHeight,
-                    encoderWidth = selectEven(sourceWidth.coerceAtMost(1280)),
-                    encoderHeight = selectEven(sourceHeight.coerceAtMost(720)),
-                    frontCameraPreviewMirrored = selectedLens == CameraSelector.LENS_FACING_FRONT,
-                    frontCameraEncoderMirrored = selectedLens == CameraSelector.LENS_FACING_FRONT,
+        synchronized(lock) {
+            if (!runtime.isConfigured()) {
+                runtime.configure(
+                    CameraGlFanoutRuntimeConfig(
+                        cameraWidth = sourceWidth,
+                        cameraHeight = sourceHeight,
+                        previewWidth = sourceWidth,
+                        previewHeight = sourceHeight,
+                        encoderWidth = selectEven(sourceWidth.coerceAtMost(1280)),
+                        encoderHeight = selectEven(sourceHeight.coerceAtMost(720)),
+                        frontCameraPreviewMirrored = selectedLens == CameraSelector.LENS_FACING_FRONT,
+                        frontCameraEncoderMirrored = selectedLens == CameraSelector.LENS_FACING_FRONT,
+                    )
                 )
-            )
-        }
+            }
 
-        if (!runtime.isRunning()) {
-            val startResult = runtime.start()
-            if (startResult.isFailure) {
-                throw startResult.exceptionOrNull() ?: IllegalStateException("Runtime failed to start.")
+            if (!runtime.isRunning()) {
+                val startResult = runtime.start()
+                if (startResult.isFailure) {
+                    throw startResult.exceptionOrNull() ?: IllegalStateException("Runtime failed to start.")
+                }
             }
         }
     }
@@ -215,5 +219,3 @@ private class FanoutFrameAnalyzer(
 }
 
 private val IDENTITY_SURFACE_TEXTURE_MATRIX = FloatArray(16) { index -> if (index % 5 == 0) 1f else 0f }
-
-
