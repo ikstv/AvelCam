@@ -359,7 +359,10 @@ private class FanoutSurfaceFrameBridge(
 
         val metadata = synchronized(lock) {
             latestMetadata
-        } ?: return
+        } ?: run {
+            frameCoalescer.onRenderCompleted()
+            return
+        }
 
         try {
             texture.updateTexImage()
