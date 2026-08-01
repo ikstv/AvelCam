@@ -28,9 +28,8 @@ import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
 import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
-import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactorySelector
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceMode
-import com.avelcam.android.camera.pipeline.surface.ObservableCameraInputSurfaceFactory
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactoryOwner
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -63,7 +62,7 @@ fun CameraPreview(
         val previewDestination = FanoutPreviewDestinationRegistry()
         val frameBridge = FanoutSurfaceFrameBridge(runtime = runtime, analysisExecutor = analysisExecutor)
         var frameAnalyzer: FanoutFrameAnalyzer? = null
-        var surfaceInputFactory: ObservableCameraInputSurfaceFactory? = null
+        var surfaceFactoryOwner: CameraInputSurfaceFactoryOwner? = null
 
         providerFuture.addListener(
             {
@@ -80,7 +79,7 @@ fun CameraPreview(
                     previewDestination = previewDestination,
                     frameBridge = frameBridge,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
-                    onSurfaceFactoryCreated = { factory -> surfaceInputFactory = factory },
+                    onSurfaceFactoryOwnerCreated = { owner -> surfaceFactoryOwner = owner },
                     onRuntimeError = { message ->
                         latestOnError(message)
                     },
@@ -96,7 +95,8 @@ fun CameraPreview(
             frameAnalyzer?.release()
             frameAnalyzer = null
             previewDestination.release(runtime)
-            surfaceInputFactory?.clearSurface()
+            surfaceFactoryOwner?.close()
+            surfaceFactoryOwner = null
             runtime.release()
             analysisExecutor.shutdown()
             if (providerFuture.isDone) {
@@ -121,7 +121,7 @@ private fun bindPreview(
     previewDestination: FanoutPreviewDestinationRegistry,
     frameBridge: FanoutSurfaceFrameBridge,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
-    onSurfaceFactoryCreated: (ObservableCameraInputSurfaceFactory) -> Unit,
+    onSurfaceFactoryOwnerCreated: (CameraInputSurfaceFactoryOwner) -> Unit,
     onRuntimeError: (String) -> Unit,
 ) {
     try {
@@ -150,8 +150,9 @@ private fun bindPreview(
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
-        val surfaceFactory = CameraInputSurfaceFactorySelector.create(CameraInputSurfaceMode.DEFAULT)
-        onSurfaceFactoryCreated(surfaceFactory)
+        val surfaceFactoryOwner = CameraInputSurfaceFactoryOwner.create(CameraInputSurfaceMode.DEFAULT)
+        val surfaceFactory = surfaceFactoryOwner.factory
+        onSurfaceFactoryOwnerCreated(surfaceFactoryOwner)
         surfaceFactory.setListener { surface ->
             frameBridge.bindSurface(surface, selectedLens == CameraSelector.LENS_FACING_FRONT)
             frameBridge.start()
