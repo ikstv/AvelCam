@@ -61,9 +61,10 @@ class CameraGlFanoutRuntime(
     fun onCameraFrame(
         sourceWidth: Int,
         sourceHeight: Int,
-        metadata: CameraFrameMetadata
+        metadata: CameraFrameMetadata,
+        sourceTextureId: Int = 0,
     ) {
-        controller.onCameraFrame(sourceWidth, sourceHeight, metadata)
+        controller.onCameraFrame(sourceWidth, sourceHeight, metadata, sourceTextureId)
     }
 
     fun registerPreviewDestination(destination: CameraGlFanoutDestination) {

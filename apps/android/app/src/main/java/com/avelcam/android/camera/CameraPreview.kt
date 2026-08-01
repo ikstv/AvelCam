@@ -401,6 +401,7 @@ private class FanoutSurfaceFrameBridge(
                     isFrontCamera = isFrontCamera,
                     surfaceTextureTransformMatrix = latestSurfaceTransform.copyOf(),
                 ),
+                sourceTextureId = texture.textureName,
             )
         } finally {
             frameCoalescer.onRenderCompleted()

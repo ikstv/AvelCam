@@ -18,6 +18,7 @@ class PreviewSurfaceGlDestination(
     }
 
     private val eglSurface = EglInputSurface(surface)
+    private val previewRenderer = PreviewGlRenderer()
     private val isReleased = AtomicBoolean(false)
 
     override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
@@ -32,14 +33,38 @@ class PreviewSurfaceGlDestination(
 
         return try {
             eglSurface.makeCurrent()
-            GLES20.glViewport(0, 0, spec.width, spec.height)
-            GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1f)
-            GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            var isOesRendered = false
+            var oesError: String? = null
+            if (frame.sourceTextureId > 0) {
+                val oesResult = runCatching {
+                    previewRenderer.render(
+                        textureId = frame.sourceTextureId,
+                        transform = frame.transformSnapshot,
+                        width = spec.width,
+                        height = spec.height,
+                    )
+                }
+                isOesRendered = oesResult.getOrElse {
+                    oesError = it.message
+                    false
+                }
+            }
+
+            if (!isOesRendered) {
+                GLES20.glViewport(0, 0, spec.width, spec.height)
+                GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1f)
+                GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            }
             val accepted = eglSurface.swapBuffers(frame.presentationTimestampNs)
             CameraGlFanoutRenderResult(
                 role = spec.role,
                 rendered = accepted,
-                message = if (!accepted) "EGL swapBuffers failed." else null
+                isFatal = isOesRendered.not() && frame.sourceTextureId > 0 && oesError != null,
+                message = if (!accepted) {
+                    "EGL swapBuffers failed."
+                } else {
+                    oesError?.let { "OES render fallback used: $it" }
+                },
             )
         } catch (error: Throwable) {
             CameraGlFanoutRenderResult(
@@ -56,5 +81,6 @@ class PreviewSurfaceGlDestination(
             return
         }
         eglSurface.close()
+        previewRenderer.close()
     }
 }

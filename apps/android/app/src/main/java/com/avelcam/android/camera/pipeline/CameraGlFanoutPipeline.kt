@@ -8,11 +8,13 @@ data class CameraGlFanoutFrame(
     val transform: FloatArray,
     val sourceTimestampNs: Long,
     val presentationTimestampNs: Long,
+    val sourceTextureId: Int = 0,
 ) {
     init {
         require(sourceWidth > 0) { "sourceWidth must be > 0." }
         require(sourceHeight > 0) { "sourceHeight must be > 0." }
         require(transform.size == 16) { "transform must contain exactly 16 values." }
+        require(sourceTextureId >= 0) { "sourceTextureId must be >= 0." }
     }
 
     val transformSnapshot: FloatArray = transform.copyOf()

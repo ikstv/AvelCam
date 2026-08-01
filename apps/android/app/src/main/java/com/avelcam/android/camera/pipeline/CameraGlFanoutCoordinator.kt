@@ -56,7 +56,8 @@ class CameraGlFanoutCoordinator(
     fun onCameraFrame(
         sourceWidth: Int,
         sourceHeight: Int,
-        metadata: CameraFrameMetadata
+        metadata: CameraFrameMetadata,
+        sourceTextureId: Int = 0,
     ) {
         ensureConfigured()
         ensureRunning()
@@ -68,6 +69,7 @@ class CameraGlFanoutCoordinator(
             transform = metadata.copySurfaceTextureTransformMatrix(),
             sourceTimestampNs = metadata.sourceTimestampNs,
             presentationTimestampNs = mappedPresentationTimestamp,
+            sourceTextureId = sourceTextureId,
         )
         pipeline.renderFrame(frame)
     }
@@ -108,4 +110,3 @@ data class CameraGlFanoutCoordinatorSnapshot(
     val pipelineSummary: CameraGlFanoutRenderSummary,
     val timestampSnapshot: CameraTimestampSnapshot,
 )
-
