@@ -13,6 +13,13 @@ data class CameraEncoderOutputManagerState(
     val lastError: String? = null,
 )
 
+interface CameraEncoderOutputManagerContract {
+    fun start(): Result<Unit>
+    fun stop(): Result<Unit>
+    fun snapshot(): CameraEncoderOutputManagerState
+    fun release()
+}
+
 class CameraEncoderOutputManager(
     private val encoderConfig: EncoderConfig,
     private val sink: EncodedFrameSink,
@@ -96,3 +103,13 @@ class CameraEncoderOutputManager(
         started = false
     }
 }
+
+// Keeps existing API surface compatible while exposing a lightweight contract
+// for orchestration and unit-test dependency injection.
+val CameraEncoderOutputManager.asContract: CameraEncoderOutputManagerContract
+    get() = object : CameraEncoderOutputManagerContract {
+        override fun start(): Result<Unit> = this@asContract.start()
+        override fun stop(): Result<Unit> = this@asContract.stop()
+        override fun snapshot(): CameraEncoderOutputManagerState = this@asContract.snapshot()
+        override fun release() = this@asContract.release()
+    }
