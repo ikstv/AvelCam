@@ -34,7 +34,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
 @Composable
-fun CameraPreview(
+internal fun CameraPreview(
     selectedLens: Int,
     onAvailabilityUpdated: (hasRearCamera: Boolean, hasFrontCamera: Boolean) -> Unit,
     onError: (String?) -> Unit,
