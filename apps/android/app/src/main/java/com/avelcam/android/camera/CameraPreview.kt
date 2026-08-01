@@ -309,6 +309,7 @@ private class FanoutSurfaceFrameBridge(
     private var surfaceRotationDegrees: Int = 0
     private var lastSourceWidth: Int = 0
     private var lastSourceHeight: Int = 0
+    private var activeSourceTextureId: Int = 0
     private var isFrontCamera: Boolean = false
 
     fun bindSurface(surface: CameraInputSurface, isFrontCamera: Boolean) {
@@ -316,6 +317,7 @@ private class FanoutSurfaceFrameBridge(
             activeSurfaceTexture?.setOnFrameAvailableListener(null)
             this.isFrontCamera = isFrontCamera
             activeSurfaceTexture = surface.surfaceTexture
+            activeSourceTextureId = surface.sourceTextureId
             lastSourceWidth = surface.resolution.width
             lastSourceHeight = surface.resolution.height
             activeSurfaceTexture?.setOnFrameAvailableListener {
@@ -385,6 +387,7 @@ private class FanoutSurfaceFrameBridge(
                     isFrontCamera = isFrontCamera,
                     surfaceTextureTransformMatrix = latestSurfaceTransform.copyOf(),
                 ),
+                sourceTextureId = activeSourceTextureId,
             )
         } finally {
             frameCoalescer.onRenderCompleted()
@@ -395,6 +398,7 @@ private class FanoutSurfaceFrameBridge(
         synchronized(lock) {
             activeSurfaceTexture?.setOnFrameAvailableListener(null)
             activeSurfaceTexture = null
+            activeSourceTextureId = 0
             frameCoalescer.release()
         }
     }
