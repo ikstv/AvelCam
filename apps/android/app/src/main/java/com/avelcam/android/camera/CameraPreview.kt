@@ -234,15 +234,26 @@ private class FanoutPreviewDestinationRegistry {
     private val lock = Any()
     private var surfaceTexture: SurfaceTexture? = null
     private var destination: PreviewSurfaceGlDestination? = null
+    private var destinationWidth: Int = 0
+    private var destinationHeight: Int = 0
 
     fun ensureDestinationRegistered(runtime: CameraGlFanoutRuntime, width: Int, height: Int) {
         synchronized(lock) {
-            if (destination != null) {
+            val safeWidth = width.coerceAtLeast(1)
+            val safeHeight = height.coerceAtLeast(1)
+
+            if (destination != null && destinationWidth == safeWidth && destinationHeight == safeHeight) {
                 return
             }
 
-            val safeWidth = width.coerceAtLeast(1)
-            val safeHeight = height.coerceAtLeast(1)
+            if (destination != null) {
+                runtime.unregisterPreviewDestination(destination)
+                destination?.release()
+                destination = null
+                surfaceTexture?.release()
+                surfaceTexture = null
+            }
+
             val nextTexture = SurfaceTexture(0).also {
                 it.setDefaultBufferSize(safeWidth, safeHeight)
             }
@@ -258,6 +269,8 @@ private class FanoutPreviewDestinationRegistry {
             runtime.registerPreviewDestination(nextDestination)
             this.surfaceTexture = nextTexture
             this.destination = nextDestination
+            this.destinationWidth = safeWidth
+            this.destinationHeight = safeHeight
         }
     }
 
@@ -273,6 +286,8 @@ private class FanoutPreviewDestinationRegistry {
             surfaceTexture?.release()
             destination = null
             surfaceTexture = null
+            destinationWidth = 0
+            destinationHeight = 0
         }
     }
 }
