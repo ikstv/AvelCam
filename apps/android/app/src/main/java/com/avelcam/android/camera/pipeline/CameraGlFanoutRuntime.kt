@@ -66,6 +66,17 @@ class CameraGlFanoutRuntime(
         controller.onCameraFrame(sourceWidth, sourceHeight, metadata)
     }
 
+    fun registerPreviewDestination(destination: CameraGlFanoutDestination) {
+        if (!configured) {
+            throw IllegalStateException("Runtime not configured.")
+        }
+        controller.registerPreviewDestination(destination)
+    }
+
+    fun unregisterPreviewDestination(destination: CameraGlFanoutDestination) {
+        controller.unregisterPreviewDestination(destination)
+    }
+
     fun snapshot(): CameraGlFanoutRuntimeSnapshot {
         return CameraGlFanoutRuntimeSnapshot(
             configured = configured,

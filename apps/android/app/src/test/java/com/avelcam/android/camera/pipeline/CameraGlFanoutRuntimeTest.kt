@@ -1,6 +1,7 @@
 package com.avelcam.android.camera.pipeline
 
 import com.avelcam.android.encoder.EncoderConfig
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,6 +55,44 @@ class CameraGlFanoutRuntimeTest {
         runtime.stop()
         val stoppedSnapshot = runtime.snapshot()
         assertFalse(stoppedSnapshot.controller.running)
+    }
+
+    @Test
+    fun registerPreviewDestinationRequiresConfiguration() {
+        val runtime = CameraGlFanoutRuntime()
+        val destination = object : CameraGlFanoutDestination {
+            override val spec: CameraGlFanoutOutputSpec = CameraGlFanoutOutputSpec(
+                role = CameraGlFanoutOutputRole.PREVIEW,
+                width = 640,
+                height = 480
+            )
+
+            override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
+                return CameraGlFanoutRenderResult(role = spec.role, rendered = true)
+            }
+
+            override fun release() {}
+        }
+
+        var thrown = false
+        try {
+            runtime.registerPreviewDestination(destination)
+        } catch (_: IllegalStateException) {
+            thrown = true
+        }
+
+        assertTrue(thrown)
+
+        runtime.configure(defaultRuntimeConfig)
+        runtime.registerPreviewDestination(destination)
+        runtime.start()
+        val snapshot = runtime.snapshot()
+        assertEquals(1, snapshot.controller.coordinator.destinationsRegistered)
+
+        runtime.unregisterPreviewDestination(destination)
+        runtime.stop()
+        val afterSnapshot = runtime.snapshot()
+        assertEquals(0, afterSnapshot.controller.coordinator.destinationsRegistered)
     }
 
     @Test
