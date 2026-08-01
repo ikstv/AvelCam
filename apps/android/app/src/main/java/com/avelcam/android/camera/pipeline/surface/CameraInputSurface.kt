@@ -34,7 +34,8 @@ internal class CameraInputSurface internal constructor(
     val resolution: Size,
     val surfaceTexture: SurfaceTexture,
     val sourceTextureId: Int,
-    override val surface: CameraSurfaceRequestSurface
+    override val surface: CameraSurfaceRequestSurface,
+    private val onRelease: () -> Unit = {},
 ) : CameraSurfaceOwnedSurface {
     private val isReleased = AtomicBoolean(false)
 
@@ -54,8 +55,12 @@ internal class CameraInputSurface internal constructor(
             return
         }
 
-        surface.release()
-        surfaceTexture.release()
+        try {
+            surface.release()
+            surfaceTexture.release()
+        } finally {
+            onRelease()
+        }
     }
 
     companion object {
@@ -71,7 +76,7 @@ internal class CameraInputSurface internal constructor(
                 resolution = resolution,
                 surfaceTexture = surfaceTexture,
                 sourceTextureId = 0,
-                surface = AndroidSurfaceRequestToken(surface)
+                surface = AndroidSurfaceRequestToken(surface),
             )
         }
     }
