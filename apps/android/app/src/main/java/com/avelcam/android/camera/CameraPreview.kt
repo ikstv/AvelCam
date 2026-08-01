@@ -28,6 +28,8 @@ import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
 import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactorySelector
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceMode
 import com.avelcam.android.camera.pipeline.surface.ObservableCameraInputSurfaceFactory
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
@@ -148,7 +150,7 @@ private fun bindPreview(
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
-        val surfaceFactory = ObservableCameraInputSurfaceFactory()
+        val surfaceFactory = CameraInputSurfaceFactorySelector.create(CameraInputSurfaceMode.DEFAULT)
         onSurfaceFactoryCreated(surfaceFactory)
         surfaceFactory.setListener { surface ->
             frameBridge.bindSurface(surface, selectedLens == CameraSelector.LENS_FACING_FRONT)
