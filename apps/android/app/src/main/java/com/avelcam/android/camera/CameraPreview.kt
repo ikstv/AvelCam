@@ -20,18 +20,24 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import com.avelcam.android.camera.pipeline.CameraEncoderOutputManager
 import com.avelcam.android.camera.pipeline.CameraFrameCoalescer
 import com.avelcam.android.camera.pipeline.CameraFrameMetadata
+import com.avelcam.android.camera.pipeline.CameraGlFanoutController
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntime
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntimeConfig
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
+import com.avelcam.android.camera.pipeline.EncoderSurfaceGlDestination
 import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
+import com.avelcam.android.camera.pipeline.asContract
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceMode
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactoryOwner
+import com.avelcam.android.encoder.gl.EglInputSurface
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 
 @Composable
 internal fun CameraPreview(
@@ -47,7 +53,33 @@ internal fun CameraPreview(
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
-    val runtime = remember { CameraGlFanoutRuntime() }
+    val destinationSurfaceFactory = remember {
+        AtomicReference<(Surface) -> EglInputSurface> { surface ->
+            EglInputSurface(surface)
+        }
+    }
+    val runtime = remember(destinationSurfaceFactory) {
+        CameraGlFanoutRuntime(
+            controller = CameraGlFanoutController(
+                outputManagerFactory = { coordinator, config, sink, _ ->
+                    CameraEncoderOutputManager(
+                        encoderConfig = config,
+                        sink = sink,
+                        coordinator = coordinator,
+                        destinationFactory = { spec, surface ->
+                            EncoderSurfaceGlDestination(
+                                spec = spec,
+                                surface = surface,
+                                createEglSurface = { destinationSurface ->
+                                    destinationSurfaceFactory.get().invoke(destinationSurface)
+                                },
+                            )
+                        },
+                    ).asContract
+                }
+            )
+        )
+    }
     val latestOnError by rememberUpdatedState(onError)
 
     AndroidView(
@@ -60,7 +92,7 @@ internal fun CameraPreview(
         val providerFuture = ProcessCameraProvider.getInstance(context)
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val analysisExecutor = Executors.newSingleThreadExecutor()
-        val previewDestination = FanoutPreviewDestinationRegistry()
+        val previewDestination = FanoutPreviewDestinationRegistry(destinationSurfaceFactory)
         val frameBridge = FanoutSurfaceFrameBridge(runtime = runtime, analysisExecutor = analysisExecutor)
         var frameAnalyzer: FanoutFrameAnalyzer? = null
         var surfaceFactoryOwner: CameraInputSurfaceFactoryOwner? = null
@@ -80,7 +112,16 @@ internal fun CameraPreview(
                     previewDestination = previewDestination,
                     frameBridge = frameBridge,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
-                    onSurfaceFactoryOwnerCreated = { owner -> surfaceFactoryOwner = owner },
+                    onSurfaceFactoryOwnerCreated = { owner ->
+                        surfaceFactoryOwner = owner
+                        destinationSurfaceFactory.set(
+                            owner.eglContext?.let { eglContext ->
+                                { destinationSurface ->
+                                    eglContext.createInputSurface(destinationSurface)
+                                }
+                            } ?: { destinationSurface -> EglInputSurface(destinationSurface) }
+                        )
+                    },
                     cameraInputSurfaceMode = cameraInputSurfaceMode,
                     onRuntimeError = { message ->
                         latestOnError(message)
@@ -425,7 +466,9 @@ private fun normalizeRotation(rawRotation: Int): Int {
     }
 }
 
-private class FanoutPreviewDestinationRegistry {
+private class FanoutPreviewDestinationRegistry(
+    private val destinationSurfaceFactory: AtomicReference<(Surface) -> EglInputSurface>,
+) {
     private val lock = Any()
     private var surfaceTexture: SurfaceTexture? = null
     private var destination: PreviewSurfaceGlDestination? = null
@@ -459,7 +502,10 @@ private class FanoutPreviewDestinationRegistry {
                     width = safeWidth,
                     height = safeHeight,
                 ),
-                Surface(nextTexture)
+                Surface(nextTexture),
+                createEglSurface = { surface ->
+                    destinationSurfaceFactory.get().invoke(surface)
+                },
             )
 
             runtime.registerPreviewDestination(nextDestination)

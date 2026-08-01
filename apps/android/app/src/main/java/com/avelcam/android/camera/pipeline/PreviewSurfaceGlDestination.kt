@@ -9,7 +9,7 @@ class PreviewSurfaceGlDestination(
     override val spec: CameraGlFanoutOutputSpec,
     surface: Surface,
     createEglSurface: (Surface) -> EglInputSurface = { EglInputSurface(it) },
-) : CameraGlFanoutDestination {
+): CameraGlFanoutDestination {
     init {
         require(spec.role == CameraGlFanoutOutputRole.PREVIEW) {
             "PreviewSurfaceGlDestination requires PREVIEW role."
@@ -19,7 +19,7 @@ class PreviewSurfaceGlDestination(
     }
 
     private val eglSurface = createEglSurface(surface)
-    private val previewRenderer = PreviewGlRenderer()
+    private var previewRenderer: PreviewGlRenderer? = null
     private val isReleased = AtomicBoolean(false)
 
     override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
@@ -34,11 +34,12 @@ class PreviewSurfaceGlDestination(
 
         return try {
             eglSurface.makeCurrent()
+            val renderer = ensureRenderer()
             var isOesRendered = false
             var oesError: String? = null
             if (frame.sourceTextureId > 0) {
                 val oesResult = runCatching {
-                    previewRenderer.render(
+                    renderer.render(
                         textureId = frame.sourceTextureId,
                         transform = frame.transformSnapshot,
                         width = spec.width,
@@ -82,6 +83,11 @@ class PreviewSurfaceGlDestination(
             return
         }
         eglSurface.close()
-        previewRenderer.close()
+        previewRenderer?.close()
+        previewRenderer = null
+    }
+
+    private fun ensureRenderer(): PreviewGlRenderer {
+        return previewRenderer ?: PreviewGlRenderer().also { previewRenderer = it }
     }
 }

@@ -72,8 +72,8 @@ internal class PreviewGlRenderer : AutoCloseable {
         GLES20.glViewport(0, 0, width, height)
         GLES20.glUseProgram(program)
 
-        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
         GLES20.glUniform1i(uTextureSampler, 0)
         GLES20.glUniformMatrix4fv(uTextureMatrix, 1, false, transform, 0)
 
