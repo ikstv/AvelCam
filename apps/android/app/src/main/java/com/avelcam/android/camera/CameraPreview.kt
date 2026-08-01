@@ -2,7 +2,6 @@ package com.avelcam.android.camera
 
 import android.content.Context
 import android.graphics.SurfaceTexture
-import android.view.Surface
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -234,7 +233,6 @@ private class FanoutFrameAnalyzer(
 private class FanoutPreviewDestinationRegistry {
     private val lock = Any()
     private var surfaceTexture: SurfaceTexture? = null
-    private var surface: Surface? = null
     private var destination: PreviewSurfaceGlDestination? = null
 
     fun ensureDestinationRegistered(runtime: CameraGlFanoutRuntime, width: Int, height: Int) {
@@ -248,19 +246,17 @@ private class FanoutPreviewDestinationRegistry {
             val nextTexture = SurfaceTexture(0).also {
                 it.setDefaultBufferSize(safeWidth, safeHeight)
             }
-            val nextSurface = Surface(nextTexture)
             val nextDestination = PreviewSurfaceGlDestination(
                 CameraGlFanoutOutputSpec(
                     role = CameraGlFanoutOutputRole.PREVIEW,
                     width = safeWidth,
                     height = safeHeight,
                 ),
-                nextSurface
+                Surface(nextTexture)
             )
 
             runtime.registerPreviewDestination(nextDestination)
             this.surfaceTexture = nextTexture
-            this.surface = nextSurface
             this.destination = nextDestination
         }
     }
@@ -275,10 +271,8 @@ private class FanoutPreviewDestinationRegistry {
             runtime.unregisterPreviewDestination(currentDestination)
             currentDestination.release()
             surfaceTexture?.release()
-            surface?.release()
             destination = null
             surfaceTexture = null
-            surface = null
         }
     }
 }
