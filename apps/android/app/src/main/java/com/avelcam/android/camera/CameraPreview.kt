@@ -169,7 +169,6 @@ private fun bindPreview(
                 }
             },
             transformationObserver = { _, transformation ->
-                surfaceRotationDegrees.set(transformation.rotationDegrees)
                 frameBridge.updateSurfaceRotation(transformation.rotationDegrees)
             },
         )
