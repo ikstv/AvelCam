@@ -153,7 +153,18 @@ private fun bindPreview(
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
-        val surfaceFactoryOwner = CameraInputSurfaceFactoryOwner.create(cameraInputSurfaceMode)
+        val surfaceFactoryOwner = runCatching {
+            CameraInputSurfaceFactoryOwner.create(cameraInputSurfaceMode)
+        }.getOrElse { error ->
+            if (cameraInputSurfaceMode != CameraInputSurfaceMode.EGL) {
+                throw error
+            }
+            onRuntimeError(
+                "EGL camera input surface mode failed, falling back to default. " +
+                    "Reason: ${error.message ?: "unknown"}"
+            )
+            CameraInputSurfaceFactoryOwner.create(CameraInputSurfaceMode.DEFAULT)
+        }
         val surfaceFactory = surfaceFactoryOwner.factory
         onSurfaceFactoryOwnerCreated(surfaceFactoryOwner)
         surfaceFactory.setListener { surface ->
