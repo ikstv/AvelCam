@@ -168,6 +168,10 @@ private fun bindPreview(
                     onRuntimeError("Camera surface request failed: $result")
                 }
             },
+            transformationObserver = { _, transformation ->
+                surfaceRotationDegrees.set(transformation.rotationDegrees)
+                frameBridge.updateSurfaceRotation(transformation.rotationDegrees)
+            },
         )
 
         val imageAnalysis = ImageAnalysis.Builder()
@@ -319,6 +323,7 @@ private class FanoutSurfaceFrameBridge(
     private var activeSurfaceTexture: SurfaceTexture? = null
     private var latestMetadata: CameraFrameMetadata? = null
     private var latestSurfaceTransform: FloatArray = IDENTITY_SURFACE_TEXTURE_MATRIX.copyOf()
+    private var surfaceRotationDegrees: Int = 0
     private var lastSourceWidth: Int = 0
     private var lastSourceHeight: Int = 0
     private var isFrontCamera: Boolean = false
@@ -343,14 +348,21 @@ private class FanoutSurfaceFrameBridge(
 
     fun updateMetadata(metadata: CameraFrameMetadata) {
         synchronized(lock) {
+            val rotation = if (surfaceRotationDegrees == 0) metadata.rotationDegrees else surfaceRotationDegrees
             val surfaceTransform = latestSurfaceTransform.copyOf()
             latestMetadata = CameraFrameMetadata(
                 sourceTimestampNs = metadata.sourceTimestampNs,
                 mappedTimestampNs = metadata.mappedTimestampNs,
-                rotationDegrees = metadata.rotationDegrees,
+                rotationDegrees = normalizeRotation(rotation),
                 isFrontCamera = metadata.isFrontCamera,
                 surfaceTextureTransformMatrix = surfaceTransform,
             )
+        }
+    }
+
+    fun updateSurfaceRotation(rotationDegrees: Int) {
+        synchronized(lock) {
+            surfaceRotationDegrees = normalizeRotation(rotationDegrees)
         }
     }
 
@@ -383,10 +395,10 @@ private class FanoutSurfaceFrameBridge(
             runtime.onCameraFrame(
                 sourceWidth = lastSourceWidth.coerceAtLeast(1),
                 sourceHeight = lastSourceHeight.coerceAtLeast(1),
-            metadata = CameraFrameMetadata(
+                metadata = CameraFrameMetadata(
                     sourceTimestampNs = textureTimestamp.takeIf { it > 0L } ?: metadata.sourceTimestampNs,
                     mappedTimestampNs = metadata.mappedTimestampNs,
-                    rotationDegrees = normalizeRotation(metadata.rotationDegrees),
+                    rotationDegrees = metadata.rotationDegrees,
                     isFrontCamera = isFrontCamera,
                     surfaceTextureTransformMatrix = latestSurfaceTransform.copyOf(),
                 ),
