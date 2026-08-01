@@ -27,6 +27,12 @@ import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntimeConfig
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
 import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFailure
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactory
+import com.avelcam.android.camera.pipeline.surface.CameraSurfaceProvider
+import com.avelcam.android.camera.pipeline.surface.CameraSurfaceRequestResolution
+import com.avelcam.android.camera.pipeline.surface.DefaultCameraInputSurfaceFactory
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
@@ -54,10 +60,12 @@ fun CameraPreview(
     DisposableEffect(selectedLens, lifecycleOwner) {
         var disposed = false
         val providerFuture = ProcessCameraProvider.getInstance(context)
-        val executor = ContextCompat.getMainExecutor(context)
+        val mainExecutor = ContextCompat.getMainExecutor(context)
         val analysisExecutor = Executors.newSingleThreadExecutor()
         val previewDestination = FanoutPreviewDestinationRegistry()
+        val frameBridge = FanoutSurfaceFrameBridge(runtime = runtime, analysisExecutor = analysisExecutor)
         var frameAnalyzer: FanoutFrameAnalyzer? = null
+        var surfaceInputFactory: FanoutCameraInputSurfaceFactory? = null
 
         providerFuture.addListener(
             {
@@ -72,21 +80,25 @@ fun CameraPreview(
                     runtime = runtime,
                     analysisExecutor = analysisExecutor,
                     previewDestination = previewDestination,
+                    frameBridge = frameBridge,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
+                    onSurfaceFactoryCreated = { factory -> surfaceInputFactory = factory },
                     onRuntimeError = { message ->
                         latestOnError(message)
                     },
                 )
             },
-            executor
+            mainExecutor
         )
 
         onDispose {
             disposed = true
             runtime.stop()
+            frameBridge.release()
             frameAnalyzer?.release()
             frameAnalyzer = null
             previewDestination.release(runtime)
+            surfaceInputFactory?.clearSurface()
             runtime.release()
             analysisExecutor.shutdown()
             if (providerFuture.isDone) {
@@ -109,7 +121,9 @@ private fun bindPreview(
     runtime: CameraGlFanoutRuntime,
     analysisExecutor: Executor,
     previewDestination: FanoutPreviewDestinationRegistry,
+    frameBridge: FanoutSurfaceFrameBridge,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
+    onSurfaceFactoryCreated: (FanoutCameraInputSurfaceFactory) -> Unit,
     onRuntimeError: (String) -> Unit,
 ) {
     try {
@@ -138,6 +152,24 @@ private fun bindPreview(
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
+        val surfaceFactory = FanoutCameraInputSurfaceFactory()
+        onSurfaceFactoryCreated(surfaceFactory)
+        surfaceFactory.setListener { surface ->
+            frameBridge.bindSurface(surface, selectedLens == CameraSelector.LENS_FACING_FRONT)
+            frameBridge.start()
+        }
+
+        val surfaceProvider = CameraSurfaceProvider(
+            callbackExecutor = analysisExecutor,
+            surfaceFactory = surfaceFactory,
+            requestStateObserver = { _ -> },
+            requestResultObserver = { _, result, _, isFatal ->
+                if (isFatal) {
+                    onRuntimeError("Camera surface request failed: $result")
+                }
+            },
+        )
+
         val imageAnalysis = ImageAnalysis.Builder()
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
@@ -148,6 +180,9 @@ private fun bindPreview(
                     previewDestination = previewDestination,
                     onError = onRuntimeError,
                     analysisExecutor = analysisExecutor,
+                    onMetadata = { metadata ->
+                        frameBridge.updateMetadata(metadata)
+                    },
                 )
                 onAnalyzerCreated(analyzer)
                 it.setAnalyzer(analysisExecutor, analyzer)
@@ -159,6 +194,7 @@ private fun bindPreview(
             selector,
             preview,
             imageAnalysis,
+            surfaceProvider,
         )
         onError(null)
     } catch (error: Exception) {
@@ -172,9 +208,10 @@ private class FanoutFrameAnalyzer(
     private val previewDestination: FanoutPreviewDestinationRegistry,
     private val onError: (String) -> Unit,
     analysisExecutor: Executor,
+    private val onMetadata: (CameraFrameMetadata) -> Unit,
 ) : ImageAnalysis.Analyzer {
     private val lock = Any()
-    private val frameCoalescer = CameraFrameCoalescer { analysisExecutor.execute { renderPendingFrame() } }
+    private val frameCoalescer = CameraFrameCoalescer { analysisExecutor.execute { configureRuntimeIfNeeded() } }
     private var latestFrame: CameraGlFanoutFramePayload? = null
 
     private data class CameraGlFanoutFramePayload(
@@ -185,20 +222,21 @@ private class FanoutFrameAnalyzer(
 
     override fun analyze(image: ImageProxy) {
         try {
-            ensureRuntimeRunning(image.width, image.height)
             previewDestination.ensureDestinationRegistered(runtime, image.width, image.height)
+            val metadata = CameraFrameMetadata(
+                sourceTimestampNs = normalizeTimestamp(image.imageInfo.timestamp),
+                mappedTimestampNs = 0L,
+                rotationDegrees = normalizeRotation(image.imageInfo.rotationDegrees),
+                isFrontCamera = selectedLens == CameraSelector.LENS_FACING_FRONT,
+                surfaceTextureTransformMatrix = IDENTITY_SURFACE_TEXTURE_MATRIX,
+            )
+            onMetadata(metadata)
 
             synchronized(lock) {
                 latestFrame = CameraGlFanoutFramePayload(
                     sourceWidth = image.width,
                     sourceHeight = image.height,
-                    metadata = CameraFrameMetadata(
-                        sourceTimestampNs = normalizeTimestamp(image.imageInfo.timestamp),
-                        mappedTimestampNs = 0L,
-                        rotationDegrees = normalizeRotation(image.imageInfo.rotationDegrees),
-                        isFrontCamera = selectedLens == CameraSelector.LENS_FACING_FRONT,
-                        surfaceTextureTransformMatrix = IDENTITY_SURFACE_TEXTURE_MATRIX,
-                    ),
+                    metadata = metadata,
                 )
             }
             frameCoalescer.onFrameAvailable()
@@ -209,7 +247,7 @@ private class FanoutFrameAnalyzer(
         }
     }
 
-    private fun renderPendingFrame() {
+    private fun configureRuntimeIfNeeded() {
         val frame = synchronized(lock) {
             val pending = latestFrame
             latestFrame = null
@@ -217,11 +255,7 @@ private class FanoutFrameAnalyzer(
         } ?: return
 
         try {
-            runtime.onCameraFrame(
-                sourceWidth = frame.sourceWidth,
-                sourceHeight = frame.sourceHeight,
-                metadata = frame.metadata,
-            )
+            ensureRuntimeRunning(frame.sourceWidth, frame.sourceHeight)
         } catch (error: Throwable) {
             onError(error.localizedMessage ?: "Frame processing failed")
         } finally {
@@ -273,6 +307,94 @@ private class FanoutFrameAnalyzer(
     private fun selectEven(value: Int): Int {
         val safeValue = value.coerceAtLeast(2)
         return if (safeValue % 2 == 0) safeValue else safeValue + 1
+    }
+}
+
+private class FanoutSurfaceFrameBridge(
+    private val runtime: CameraGlFanoutRuntime,
+    private val analysisExecutor: Executor,
+) {
+    private val lock = Any()
+    private val frameCoalescer = CameraFrameCoalescer { analysisExecutor.execute { onFrameAvailable() } }
+    private var activeSurfaceTexture: SurfaceTexture? = null
+    private var latestMetadata: CameraFrameMetadata? = null
+    private var lastSourceWidth: Int = 0
+    private var lastSourceHeight: Int = 0
+    private var isFrontCamera: Boolean = false
+
+    fun bindSurface(surface: CameraInputSurface, isFrontCamera: Boolean) {
+        synchronized(lock) {
+            activeSurfaceTexture?.setOnFrameAvailableListener(null)
+            this.isFrontCamera = isFrontCamera
+            activeSurfaceTexture = surface.surfaceTexture
+            lastSourceWidth = surface.resolution.width
+            lastSourceHeight = surface.resolution.height
+            activeSurfaceTexture?.setOnFrameAvailableListener {
+                frameCoalescer.onFrameAvailable()
+            }
+        }
+    }
+
+    fun updateMetadata(metadata: CameraFrameMetadata) {
+        synchronized(lock) {
+            latestMetadata = metadata
+        }
+    }
+
+    fun start() {
+        synchronized(lock) {
+            // frame processing will run when CameraSurface delivers frames
+        }
+    }
+
+    private fun onFrameAvailable() {
+        val texture = synchronized(lock) {
+            activeSurfaceTexture ?: return
+        }
+
+        if (!runtime.isRunning()) {
+            frameCoalescer.onRenderCompleted()
+            return
+        }
+
+        val metadata = synchronized(lock) {
+            latestMetadata
+        } ?: return
+
+        try {
+            texture.updateTexImage()
+            val textureTimestamp = texture.timestamp
+            runtime.onCameraFrame(
+                sourceWidth = lastSourceWidth.coerceAtLeast(1),
+                sourceHeight = lastSourceHeight.coerceAtLeast(1),
+                metadata = CameraFrameMetadata(
+                    sourceTimestampNs = textureTimestamp.takeIf { it > 0L } ?: metadata.sourceTimestampNs,
+                    mappedTimestampNs = metadata.mappedTimestampNs,
+                    rotationDegrees = normalizeRotation(metadata.rotationDegrees),
+                    isFrontCamera = isFrontCamera,
+                    surfaceTextureTransformMatrix = metadata.copySurfaceTextureTransformMatrix(),
+                ),
+            )
+        } catch (_: Throwable) {
+            frameCoalescer.onRenderCompleted()
+        } finally {
+            frameCoalescer.onRenderCompleted()
+        }
+    }
+
+    fun release() {
+        synchronized(lock) {
+            activeSurfaceTexture?.setOnFrameAvailableListener(null)
+            activeSurfaceTexture = null
+            frameCoalescer.release()
+        }
+    }
+}
+
+private fun normalizeRotation(rawRotation: Int): Int {
+    return when (rawRotation) {
+        0, 90, 180, 270 -> rawRotation
+        else -> 0
     }
 }
 
@@ -336,6 +458,34 @@ private class FanoutPreviewDestinationRegistry {
             destinationWidth = 0
             destinationHeight = 0
         }
+    }
+}
+
+private class FanoutCameraInputSurfaceFactory(
+    private val delegate: CameraInputSurfaceFactory = DefaultCameraInputSurfaceFactory(),
+) : CameraInputSurfaceFactory {
+    private var onSurfaceCreated: ((CameraInputSurface) -> Unit)? = null
+    private var lastSurface: CameraInputSurface? = null
+
+    override fun create(resolution: CameraSurfaceRequestResolution): CameraInputSurface {
+        val surface = try {
+            delegate.create(resolution)
+        } catch (failure: CameraInputSurfaceFailure) {
+            throw failure
+        }
+        onSurfaceCreated?.invoke(surface)
+        lastSurface = surface
+        return surface
+    }
+
+    fun setListener(listener: (CameraInputSurface) -> Unit) {
+        onSurfaceCreated = listener
+        lastSurface?.let(listener)
+    }
+
+    fun clearSurface() {
+        lastSurface?.release()
+        lastSurface = null
     }
 }
 
