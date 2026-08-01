@@ -38,6 +38,7 @@ fun CameraPreview(
     selectedLens: Int,
     onAvailabilityUpdated: (hasRearCamera: Boolean, hasFrontCamera: Boolean) -> Unit,
     onError: (String?) -> Unit,
+    cameraInputSurfaceMode: CameraInputSurfaceMode = CameraInputSurfaceMode.DEFAULT,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -54,7 +55,7 @@ fun CameraPreview(
         factory = { previewView }
     )
 
-    DisposableEffect(selectedLens, lifecycleOwner) {
+    DisposableEffect(selectedLens, lifecycleOwner, cameraInputSurfaceMode) {
         var disposed = false
         val providerFuture = ProcessCameraProvider.getInstance(context)
         val mainExecutor = ContextCompat.getMainExecutor(context)
@@ -80,6 +81,7 @@ fun CameraPreview(
                     frameBridge = frameBridge,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
                     onSurfaceFactoryOwnerCreated = { owner -> surfaceFactoryOwner = owner },
+                    cameraInputSurfaceMode = cameraInputSurfaceMode,
                     onRuntimeError = { message ->
                         latestOnError(message)
                     },
@@ -121,6 +123,7 @@ private fun bindPreview(
     previewDestination: FanoutPreviewDestinationRegistry,
     frameBridge: FanoutSurfaceFrameBridge,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
+    cameraInputSurfaceMode: CameraInputSurfaceMode,
     onSurfaceFactoryOwnerCreated: (CameraInputSurfaceFactoryOwner) -> Unit,
     onRuntimeError: (String) -> Unit,
 ) {
@@ -150,7 +153,7 @@ private fun bindPreview(
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
 
-        val surfaceFactoryOwner = CameraInputSurfaceFactoryOwner.create(CameraInputSurfaceMode.DEFAULT)
+        val surfaceFactoryOwner = CameraInputSurfaceFactoryOwner.create(cameraInputSurfaceMode)
         val surfaceFactory = surfaceFactoryOwner.factory
         onSurfaceFactoryOwnerCreated(surfaceFactoryOwner)
         surfaceFactory.setListener { surface ->
