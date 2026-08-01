@@ -66,6 +66,21 @@ class EglCore(
         return EGL14.eglCreateWindowSurface(eglDisplay, config, surface, intArrayOf(EGL14.EGL_NONE), 0)
     }
 
+    fun createPbufferSurface(width: Int = 1, height: Int = 1): EGLSurface {
+        require(width > 0) { "Pbuffer width must be > 0." }
+        require(height > 0) { "Pbuffer height must be > 0." }
+        val attribs = intArrayOf(
+            EGL14.EGL_WIDTH, width,
+            EGL14.EGL_HEIGHT, height,
+            EGL14.EGL_NONE,
+        )
+        val surface = EGL14.eglCreatePbufferSurface(eglDisplay, config, attribs, 0)
+        if (surface == EGL14.EGL_NO_SURFACE) {
+            throw IllegalStateException("Failed to create EGL pbuffer surface.")
+        }
+        return surface
+    }
+
     fun makeCurrent(eglSurface: android.opengl.EGLSurface) {
         EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
     }
