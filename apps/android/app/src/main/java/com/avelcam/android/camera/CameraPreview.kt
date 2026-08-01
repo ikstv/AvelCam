@@ -209,6 +209,8 @@ private class FanoutFrameAnalyzer(
                 if (startResult.isFailure) {
                     throw startResult.exceptionOrNull() ?: IllegalStateException("Runtime failed to start.")
                 }
+            } else {
+                return
             }
         }
     }
