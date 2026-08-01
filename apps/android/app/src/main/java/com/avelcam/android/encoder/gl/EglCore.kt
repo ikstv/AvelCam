@@ -85,6 +85,15 @@ class EglCore(
         EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
     }
 
+    fun clearCurrent() {
+        EGL14.eglMakeCurrent(
+            eglDisplay,
+            EGL14.EGL_NO_SURFACE,
+            EGL14.EGL_NO_SURFACE,
+            EGL14.EGL_NO_CONTEXT
+        )
+    }
+
     fun swapBuffers(eglSurface: android.opengl.EGLSurface): Boolean {
         return EGL14.eglSwapBuffers(eglDisplay, eglSurface)
     }
@@ -98,12 +107,7 @@ class EglCore(
     }
 
     fun release() {
-        EGL14.eglMakeCurrent(
-            eglDisplay,
-            EGL14.EGL_NO_SURFACE,
-            EGL14.EGL_NO_SURFACE,
-            EGL14.EGL_NO_CONTEXT
-        )
+        clearCurrent()
         EGL14.eglDestroyContext(eglDisplay, eglContext)
         EGL14.eglTerminate(eglDisplay)
     }

@@ -1,6 +1,5 @@
 package com.avelcam.android.camera.pipeline
 
-import android.opengl.EGL14
 import android.opengl.EGLSurface
 import android.view.Surface
 import com.avelcam.android.camera.pipeline.surface.EglCameraInputSurfaceFactory
@@ -34,12 +33,7 @@ internal class GlFanoutEglContext : AutoCloseable {
     }
 
     override fun close() {
-        EGL14.eglMakeCurrent(
-            EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY),
-            EGL14.EGL_NO_SURFACE,
-            EGL14.EGL_NO_SURFACE,
-            EGL14.EGL_NO_CONTEXT,
-        )
+        eglCore.clearCurrent()
         eglCore.destroySurface(offscreenSurface)
         eglCore.release()
     }
