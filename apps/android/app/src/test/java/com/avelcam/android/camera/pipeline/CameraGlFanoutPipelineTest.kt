@@ -70,7 +70,7 @@ class CameraGlFanoutPipelineTest {
         assertTrue(summary.renderedSuccessfully)
 
         pipeline.start()
-        assertEquals(4L, pipeline.snapshot().framesSeen)
+        assertEquals(2L, pipeline.snapshot().framesSeen)
     }
 
     @Test

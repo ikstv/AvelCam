@@ -6,6 +6,33 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private class RuntimeTestOutputManager : CameraEncoderOutputManagerContract {
+    private var running = false
+    private var startAttempts = 0L
+
+    override fun start(): Result<Unit> {
+        startAttempts++
+        running = true
+        return Result.success(Unit)
+    }
+
+    override fun stop(): Result<Unit> {
+        running = false
+        return Result.success(Unit)
+    }
+
+    override fun snapshot(): CameraEncoderOutputManagerState = CameraEncoderOutputManagerState(
+        isRunning = running,
+        startAttempts = startAttempts,
+        selectedCodecName = null,
+        startResult = null,
+    )
+
+    override fun release() {
+        running = false
+    }
+}
+
 class CameraGlFanoutRuntimeTest {
     private val defaultRuntimeConfig = CameraGlFanoutRuntimeConfig(
         cameraWidth = 1920,
@@ -29,9 +56,15 @@ class CameraGlFanoutRuntimeTest {
         surfaceTextureTransformMatrix = FloatArray(16) { if (it % 5 == 0) 1f else 0f }
     )
 
+    private fun createRuntime(): CameraGlFanoutRuntime = CameraGlFanoutRuntime(
+        CameraGlFanoutController(
+            outputManagerFactory = { _, _, _, _ -> RuntimeTestOutputManager() }
+        )
+    )
+
     @Test
     fun startRequiresConfiguration() {
-        val runtime = CameraGlFanoutRuntime()
+        val runtime = createRuntime()
 
         val result = runtime.start()
 
@@ -41,7 +74,7 @@ class CameraGlFanoutRuntimeTest {
 
     @Test
     fun configureStartStopLifecycle() {
-        val runtime = CameraGlFanoutRuntime()
+        val runtime = createRuntime()
         runtime.configure(defaultRuntimeConfig)
         runtime.onCameraFrame(1920, 1080, metadata)
 
@@ -59,7 +92,7 @@ class CameraGlFanoutRuntimeTest {
 
     @Test
     fun registerPreviewDestinationRequiresConfiguration() {
-        val runtime = CameraGlFanoutRuntime()
+        val runtime = createRuntime()
         val destination = object : CameraGlFanoutDestination {
             override val spec: CameraGlFanoutOutputSpec = CameraGlFanoutOutputSpec(
                 role = CameraGlFanoutOutputRole.PREVIEW,
@@ -97,7 +130,7 @@ class CameraGlFanoutRuntimeTest {
 
     @Test
     fun releaseResetsConfiguration() {
-        val runtime = CameraGlFanoutRuntime()
+        val runtime = createRuntime()
         runtime.configure(defaultRuntimeConfig)
         runtime.start()
         runtime.release()

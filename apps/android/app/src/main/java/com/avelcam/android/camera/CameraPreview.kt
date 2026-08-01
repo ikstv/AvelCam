@@ -249,9 +249,10 @@ private class FanoutPreviewDestinationRegistry {
                 return
             }
 
-            if (destination != null) {
-                runtime.unregisterPreviewDestination(destination)
-                destination?.release()
+            val currentDestination = destination
+            if (currentDestination != null) {
+                runtime.unregisterPreviewDestination(currentDestination)
+                currentDestination.release()
                 destination = null
                 surfaceTexture?.release()
                 surfaceTexture = null

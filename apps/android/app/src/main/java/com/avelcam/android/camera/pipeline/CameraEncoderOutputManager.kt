@@ -24,7 +24,9 @@ class CameraEncoderOutputManager(
     private val encoderConfig: EncoderConfig,
     private val sink: EncodedFrameSink,
     private val coordinator: CameraGlFanoutCoordinator,
-    private val encoderFactory: (EncoderConfig, EncodedFrameSink) -> H264Encoder = ::H264Encoder,
+    private val encoderFactory: (EncoderConfig, EncodedFrameSink) -> H264Encoder = { requestedConfig, frameSink ->
+        H264Encoder(requestedConfig, frameSink)
+    },
     private val destinationFactory: (CameraGlFanoutOutputSpec, android.view.Surface) -> CameraGlFanoutDestination =
         { spec, surface -> EncoderSurfaceGlDestination(spec, surface) },
 ) {
