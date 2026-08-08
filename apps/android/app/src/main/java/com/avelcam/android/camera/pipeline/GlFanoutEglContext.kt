@@ -8,16 +8,23 @@ import com.avelcam.android.camera.pipeline.surface.ExternalOesTexture
 import com.avelcam.android.camera.pipeline.surface.ObservableCameraInputSurfaceFactory
 import com.avelcam.android.encoder.gl.EglCore
 import com.avelcam.android.encoder.gl.EglInputSurface
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class GlFanoutEglContext : AutoCloseable {
     private val glThread = CameraGlThread()
+    private val released = AtomicBoolean(false)
     private lateinit var eglCore: EglCore
     private lateinit var offscreenSurface: EGLSurface
 
     init {
-        glThread.call {
-            eglCore = EglCore()
-            offscreenSurface = eglCore.createPbufferSurface()
+        try {
+            glThread.call {
+                eglCore = EglCore()
+                offscreenSurface = eglCore.createPbufferSurface()
+            }
+        } catch (error: Throwable) {
+            glThread.close()
+            throw error
         }
     }
 
@@ -52,11 +59,17 @@ internal class GlFanoutEglContext : AutoCloseable {
     fun frameHandler(): Handler = glThread.handler()
 
     override fun close() {
-        glThread.call {
-            eglCore.clearCurrent()
-            eglCore.destroySurface(offscreenSurface)
-            eglCore.release()
+        if (!released.compareAndSet(false, true)) {
+            return
         }
-        glThread.close()
+        try {
+            glThread.call {
+                eglCore.clearCurrent()
+                eglCore.destroySurface(offscreenSurface)
+                eglCore.release()
+            }
+        } finally {
+            glThread.close()
+        }
     }
 }

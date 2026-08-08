@@ -44,22 +44,37 @@ class CameraEncoderOutputManager(
 
         startAttempts++
         val startedEncoder = runCatching {
-            val next = encoderFactory(encoderConfig, sink)
-            val result = next.start().getOrThrow()
-            val inputSurface = next.getInputSurface() ?: throw IllegalStateException("No encoder input surface.")
-            val spec = CameraGlFanoutOutputSpec(
-                role = CameraGlFanoutOutputRole.ENCODER,
-                width = encoderConfig.width,
-                height = encoderConfig.height
-            )
-            val nextDestination = destinationFactory(spec, inputSurface)
-            destination = nextDestination
-            coordinator.registerDestination(nextDestination)
-            encoder = next
-            startResult = result
-            lastError = null
-            started = true
-            next
+            var nextEncoder: H264Encoder? = null
+            var nextDestination: CameraGlFanoutDestination? = null
+            var destinationRegistered = false
+            try {
+                val next = encoderFactory(encoderConfig, sink)
+                nextEncoder = next
+                val result = next.start().getOrThrow()
+                val inputSurface = next.getInputSurface()
+                    ?: throw IllegalStateException("No encoder input surface.")
+                val spec = CameraGlFanoutOutputSpec(
+                    role = CameraGlFanoutOutputRole.ENCODER,
+                    width = encoderConfig.width,
+                    height = encoderConfig.height
+                )
+                nextDestination = destinationFactory(spec, inputSurface)
+                coordinator.registerDestination(nextDestination)
+                destinationRegistered = true
+                destination = nextDestination
+                encoder = next
+                startResult = result
+                lastError = null
+                started = true
+                next
+            } catch (error: Throwable) {
+                nextDestination?.let {
+                    if (destinationRegistered) coordinator.unregisterDestination(it)
+                    it.release()
+                }
+                runCatching { nextEncoder?.stop() }
+                throw error
+            }
         }
         return startedEncoder.map { Unit }
             .onFailure { error ->

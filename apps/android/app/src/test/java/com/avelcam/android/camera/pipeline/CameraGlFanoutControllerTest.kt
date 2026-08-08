@@ -145,6 +145,24 @@ class CameraGlFanoutControllerTest {
     }
 
     @Test
+    fun startAfterStopRestartsTheSameEncoderOutputManager() {
+        val fakeOutputManager = FakeEncoderOutputManager()
+        val controller = CameraGlFanoutController(
+            coordinator = CameraGlFanoutCoordinator(),
+            outputManagerFactory = { _, _, _, _ -> fakeOutputManager }
+        )
+        controller.configure(controllerConfig)
+
+        assertTrue(controller.start().isSuccess)
+        assertTrue(controller.stop().isSuccess)
+        assertTrue(controller.start().isSuccess)
+
+        assertEquals(2, fakeOutputManager.startCalls)
+        assertEquals(1, fakeOutputManager.stopCalls)
+        assertTrue(controller.snapshot().outputManager?.isRunning == true)
+    }
+
+    @Test
     fun releaseStopsEverything() {
         val fakeOutputManager = FakeEncoderOutputManager()
         val controller = CameraGlFanoutController(
