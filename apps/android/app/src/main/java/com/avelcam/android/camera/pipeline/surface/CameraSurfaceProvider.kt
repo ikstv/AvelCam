@@ -22,6 +22,8 @@ internal class CameraSurfaceProvider(
     private val lock = Any()
     private val released = AtomicBoolean(false)
     private var activeRequest: ActiveSurfaceRequest? = null
+    private var releaseCompletion: (() -> Unit)? = null
+    private var releaseCompletionInvoked = false
 
     override fun onSurfaceRequested(surfaceRequest: SurfaceRequest) {
         val request = requestAdapterProvider(surfaceRequest)
@@ -167,43 +169,43 @@ internal class CameraSurfaceProvider(
         }
     }
 
-    fun release() {
-        if (!released.compareAndSet(false, true)) {
+    fun release(onComplete: () -> Unit = {}) {
+        var completeNow = false
+        var target: ActiveSurfaceRequest?
+        synchronized(lock) {
+            if (releaseCompletion == null) releaseCompletion = onComplete
+            if (!released.compareAndSet(false, true)) return
+            target = activeRequest
+            target?.shutdownRequested = true
+            completeNow = target == null
+        }
+        if (completeNow) {
+            invokeReleaseCompletion()
             return
         }
 
-        val target = synchronized(lock) {
-            val current = activeRequest
-            if (current != null) {
-                current.shutdownRequested = true
-            }
-            current
-        }
+        val requestToRelease = target ?: return
 
-        if (target == null) {
-            return
-        }
-
-        if (!target.surfaceProvided) {
-            target.machine.transitionToRejected("Provider was released before surface provided.")
-            target.request.willNotProvideSurface()
+        if (!requestToRelease.surfaceProvided) {
+            requestToRelease.machine.transitionToRejected("Provider was released before surface provided.")
+            requestToRelease.request.willNotProvideSurface()
             requestResultObserver(
-                target.requestId,
+                requestToRelease.requestId,
                 CameraSurfaceRequestResult.WillNotProvideSurface,
                 SurfaceRequest.Result.RESULT_WILL_NOT_PROVIDE_SURFACE,
                 false
             )
-            finalizeRequestNow(target)
+            finalizeRequestNow(requestToRelease)
             return
         }
 
         synchronized(lock) {
-            if (target.resultReceived.get()) {
-                finalizeIfCompleted(target)
+            if (requestToRelease.resultReceived.get()) {
+                finalizeIfCompleted(requestToRelease)
                 return
             }
-            if (!target.machine.snapshot().isTerminal()) {
-                target.request.invalidate()
+            if (!requestToRelease.machine.snapshot().isTerminal()) {
+                requestToRelease.request.invalidate()
             }
         }
     }
@@ -234,6 +236,23 @@ internal class CameraSurfaceProvider(
         }
 
         requestState.releaseResourcesOnce()
+        invokeReleaseCompletionIfNoActiveRequest(requestState)
+    }
+
+    private fun invokeReleaseCompletionIfNoActiveRequest(requestState: ActiveSurfaceRequest) {
+        val shouldInvoke = synchronized(lock) {
+            activeRequest == null && releaseCompletion != null && !releaseCompletionInvoked
+        }
+        if (shouldInvoke) invokeReleaseCompletion()
+    }
+
+    private fun invokeReleaseCompletion() {
+        val completion = synchronized(lock) {
+            if (releaseCompletionInvoked) return
+            releaseCompletionInvoked = true
+            releaseCompletion
+        }
+        completion?.invoke()
     }
 
     private fun mapResult(resultCode: Int): CameraSurfaceRequestResult = when (resultCode) {

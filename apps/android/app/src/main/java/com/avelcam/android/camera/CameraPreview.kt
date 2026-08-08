@@ -166,12 +166,20 @@ internal fun CameraPreview(
             frameAnalyzer?.release()
             frameAnalyzer = null
             previewDestination.release(runtime)
-            surfaceFactoryOwner?.close()
-            surfaceFactoryOwner = null
-            surfaceProvider?.release()
+            val provider = surfaceProvider
+            if (provider != null) {
+                provider.release {
+                    surfaceFactoryOwner?.close()
+                    surfaceFactoryOwner = null
+                    analysisExecutor.shutdown()
+                }
+            } else {
+                surfaceFactoryOwner?.close()
+                surfaceFactoryOwner = null
+                analysisExecutor.shutdown()
+            }
             surfaceProvider = null
             runtime.release()
-            analysisExecutor.shutdown()
             if (providerFuture.isDone) {
                 try {
                     providerFuture.get().unbindAll()

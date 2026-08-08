@@ -27,8 +27,13 @@ internal class ObservableCameraInputSurfaceFactory(
         lastSurface?.let(listener)
     }
 
+    fun clearListener() {
+        onSurfaceCreated = null
+    }
+
     fun clearSurface() {
-        lastSurface?.release()
+        // CameraX owns the supplied Surface after provideSurface(). The provider
+        // releases it only after the SurfaceRequest result reaches a terminal state.
         lastSurface = null
     }
 }

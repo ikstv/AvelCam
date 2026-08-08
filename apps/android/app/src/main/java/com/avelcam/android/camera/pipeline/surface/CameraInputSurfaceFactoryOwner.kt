@@ -14,6 +14,7 @@ internal class CameraInputSurfaceFactoryOwner private constructor(
         closed = true
         try {
             factory.clearSurface()
+            factory.clearListener()
         } finally {
             closeAction()
         }
