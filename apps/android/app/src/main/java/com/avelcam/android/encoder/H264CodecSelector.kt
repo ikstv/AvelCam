@@ -3,6 +3,7 @@ package com.avelcam.android.encoder
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
+import android.os.Build
 
 data class H264CodecSelection(
     val codecName: String,
@@ -61,12 +62,15 @@ class H264CodecSelector {
             }
 
             val profileLevels = supportedProfileLevelPairs(info, config.mimeType)
+            val isHardwareAccelerated = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info.isHardwareAccelerated
+            val isSoftwareOnly = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info.isSoftwareOnly
+            val isVendor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && info.isVendor
             val candidate = H264CodecSelection(
                 codecName = info.name,
-                canonicalName = info.canonicalName,
-                isHardwareAccelerated = info.isHardwareAccelerated,
-                isSoftwareOnly = info.isSoftwareOnly,
-                isVendor = info.isVendor,
+                canonicalName = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) info.canonicalName else null,
+                isHardwareAccelerated = isHardwareAccelerated,
+                isSoftwareOnly = isSoftwareOnly,
+                isVendor = isVendor,
                 supportedProfiles = profileLevels.first.toSet(),
                 supportedLevels = profileLevels.second.toSet(),
                 supportedBitrateModes = bitrateModes,

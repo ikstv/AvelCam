@@ -47,12 +47,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.avelcam.android.camera.CameraPreview
+import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceMode
 import com.avelcam.android.encoder.diagnostic.EncoderDiagnosticPanel
 import com.avelcam.android.ui.theme.AvelCamTheme
 import com.avelcam.android.ui.theme.Dark
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+
+private const val ENABLE_EGL_CAMERA_INPUT_SURFACE = BuildConfig.ENABLE_EGL_CAMERA_INPUT_SURFACE
+private const val ENABLE_EGL_FANOUT_DEBUG = BuildConfig.ENABLE_EGL_FANOUT_DEBUG
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -155,6 +159,11 @@ fun CameraScreen(viewModel: CameraViewModel) {
                 PermissionUiState.GRANTED -> {
                     CameraPermissionGrantedScreen(
                         uiState = uiState,
+                        cameraInputSurfaceMode = if (ENABLE_EGL_CAMERA_INPUT_SURFACE || ENABLE_EGL_FANOUT_DEBUG) {
+                            CameraInputSurfaceMode.EGL
+                        } else {
+                            CameraInputSurfaceMode.DEFAULT
+                        },
                         onSwitch = viewModel::switchCamera,
                         onAvailabilityUpdated = { hasRear, hasFront ->
                             viewModel.setAvailability(hasRear, hasFront)
@@ -212,6 +221,7 @@ fun CameraScreen(viewModel: CameraViewModel) {
 @Composable
 private fun CameraPermissionGrantedScreen(
     uiState: CameraState,
+    cameraInputSurfaceMode: CameraInputSurfaceMode,
     onSwitch: () -> Unit,
     onAvailabilityUpdated: (Boolean, Boolean) -> Unit,
     onError: (String?) -> Unit
@@ -220,7 +230,8 @@ private fun CameraPermissionGrantedScreen(
         CameraPreview(
             selectedLens = uiState.selectedLens,
             onAvailabilityUpdated = onAvailabilityUpdated,
-            onError = onError
+            onError = onError,
+            cameraInputSurfaceMode = cameraInputSurfaceMode,
         )
 
         Column(

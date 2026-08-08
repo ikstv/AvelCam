@@ -1,0 +1,132 @@
+package com.avelcam.android.camera.pipeline
+
+import com.avelcam.android.encoder.EncodedFrameSink
+import com.avelcam.android.encoder.EncoderConfig
+import com.avelcam.android.encoder.H264Encoder
+import com.avelcam.android.encoder.H264EncoderStartResult
+
+data class CameraEncoderOutputManagerState(
+    val isRunning: Boolean,
+    val startAttempts: Long,
+    val selectedCodecName: String?,
+    val startResult: H264EncoderStartResult?,
+    val lastError: String? = null,
+)
+
+interface CameraEncoderOutputManagerContract {
+    fun start(): Result<Unit>
+    fun stop(): Result<Unit>
+    fun snapshot(): CameraEncoderOutputManagerState
+    fun release()
+}
+
+class CameraEncoderOutputManager(
+    private val encoderConfig: EncoderConfig,
+    private val sink: EncodedFrameSink,
+    private val coordinator: CameraGlFanoutCoordinator,
+    private val encoderFactory: (EncoderConfig, EncodedFrameSink) -> H264Encoder = { requestedConfig, frameSink ->
+        H264Encoder(requestedConfig, frameSink)
+    },
+    private val destinationFactory: (CameraGlFanoutOutputSpec, android.view.Surface) -> CameraGlFanoutDestination =
+        { spec, surface -> EncoderSurfaceGlDestination(spec, surface) },
+) {
+    private var encoder: H264Encoder? = null
+    private var destination: CameraGlFanoutDestination? = null
+    private var started = false
+    private var startAttempts = 0L
+    private var lastError: String? = null
+    private var startResult: H264EncoderStartResult? = null
+
+    fun start(): Result<Unit> {
+        if (started) {
+            return Result.failure(IllegalStateException("Output manager already running."))
+        }
+
+        startAttempts++
+        val startedEncoder = runCatching {
+            var nextEncoder: H264Encoder? = null
+            var nextDestination: CameraGlFanoutDestination? = null
+            var destinationRegistered = false
+            try {
+                val next = encoderFactory(encoderConfig, sink)
+                nextEncoder = next
+                val result = next.start().getOrThrow()
+                val inputSurface = next.getInputSurface()
+                    ?: throw IllegalStateException("No encoder input surface.")
+                val spec = CameraGlFanoutOutputSpec(
+                    role = CameraGlFanoutOutputRole.ENCODER,
+                    width = encoderConfig.width,
+                    height = encoderConfig.height
+                )
+                nextDestination = destinationFactory(spec, inputSurface)
+                coordinator.registerDestination(nextDestination)
+                destinationRegistered = true
+                destination = nextDestination
+                encoder = next
+                startResult = result
+                lastError = null
+                started = true
+                next
+            } catch (error: Throwable) {
+                nextDestination?.let {
+                    if (destinationRegistered) coordinator.unregisterDestination(it)
+                    it.release()
+                }
+                runCatching { nextEncoder?.stop() }
+                throw error
+            }
+        }
+        return startedEncoder.map { Unit }
+            .onFailure { error ->
+                lastError = error.message
+                stopInternal()
+            }
+    }
+
+    fun stop(): Result<Unit> {
+        return runCatching {
+            stopInternal()
+            startResult = null
+            lastError = null
+        }
+    }
+
+    fun snapshot(): CameraEncoderOutputManagerState {
+        return CameraEncoderOutputManagerState(
+            isRunning = started,
+            startAttempts = startAttempts,
+            selectedCodecName = encoder?.getSelectedCodec()?.codecName,
+            startResult = startResult,
+            lastError = lastError
+        )
+    }
+
+    fun release() {
+        stopInternal()
+    }
+
+    private fun stopInternal() {
+        if (!started && encoder == null && destination == null) {
+            return
+        }
+
+        destination?.let { coordinator.unregisterDestination(it) }
+        destination?.release()
+        destination = null
+        encoder?.stop()?.onFailure {
+            lastError = it.message
+        }
+        encoder = null
+        started = false
+    }
+}
+
+// Keeps existing API surface compatible while exposing a lightweight contract
+// for orchestration and unit-test dependency injection.
+val CameraEncoderOutputManager.asContract: CameraEncoderOutputManagerContract
+    get() = object : CameraEncoderOutputManagerContract {
+        override fun start(): Result<Unit> = this@asContract.start()
+        override fun stop(): Result<Unit> = this@asContract.stop()
+        override fun snapshot(): CameraEncoderOutputManagerState = this@asContract.snapshot()
+        override fun release() = this@asContract.release()
+    }

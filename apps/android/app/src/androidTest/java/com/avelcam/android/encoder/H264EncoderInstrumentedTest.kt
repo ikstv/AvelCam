@@ -15,6 +15,7 @@ import org.junit.Assume
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.Collections
+import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -241,13 +242,20 @@ class H264EncoderInstrumentedTest {
         val firstNonMonotonicPair: String,
     ) {
         fun toLogLine(): String {
-            return "cycle=$cycle codecName=$codecName width=$width height=$height targetFps=$targetFps " +
-                "targetBitrateBps=$targetBitrateBps submittedFrames=$submittedFrames encodedAccessUnits=$encodedAccessUnits " +
-                "codecConfigUnits=$codecConfigUnits keyframes=$keyframes encodedBytes=$encodedBytes " +
-                "firstOutputLatencyMs=${firstOutputLatencyMs?.let { \"%.2f\".format(it) } ?: \"na\"} " +
-                "firstPtsUs=$firstPtsUs lastPtsUs=$lastPtsUs ptsSampleCount=$ptsSampleCount ptsMonotonic=$ptsMonotonic " +
-                "firstNonMonotonicPair=$firstNonMonotonicPair measuredOutputFps=${\"%.3f\".format(measuredOutputFps)} " +
-                "measuredAverageBitrateBps=${\"%.2f\".format(measuredAverageBitrateBps)} errors=$errors"
+            return buildString {
+                append("cycle=$cycle codecName=$codecName width=$width height=$height targetFps=$targetFps ")
+                append("targetBitrateBps=$targetBitrateBps submittedFrames=$submittedFrames encodedAccessUnits=$encodedAccessUnits ")
+                append("codecConfigUnits=$codecConfigUnits keyframes=$keyframes encodedBytes=$encodedBytes ")
+                append("firstOutputLatencyMs=${firstOutputLatencyMs?.let { String.format(Locale.US, "%.2f", it) } ?: "na"} ")
+                append("firstPtsUs=$firstPtsUs lastPtsUs=$lastPtsUs ptsSampleCount=$ptsSampleCount ptsMonotonic=$ptsMonotonic ")
+                append(
+                    "firstNonMonotonicPair=$firstNonMonotonicPair "
+                )
+                append("measuredOutputFps=${String.format(Locale.US, "%.3f", measuredOutputFps)} ")
+                append("measuredAverageBitrateBps=${String.format(Locale.US, "%.2f", measuredAverageBitrateBps)} ")
+                append("errors=$errors")
+            }
         }
     }
 }
+
