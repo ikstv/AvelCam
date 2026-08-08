@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 private const val ENABLE_EGL_CAMERA_INPUT_SURFACE = BuildConfig.ENABLE_EGL_CAMERA_INPUT_SURFACE
+private const val ENABLE_EGL_FANOUT_DEBUG = BuildConfig.ENABLE_EGL_FANOUT_DEBUG
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -158,7 +159,7 @@ fun CameraScreen(viewModel: CameraViewModel) {
                 PermissionUiState.GRANTED -> {
                     CameraPermissionGrantedScreen(
                         uiState = uiState,
-                        cameraInputSurfaceMode = if (ENABLE_EGL_CAMERA_INPUT_SURFACE) {
+                        cameraInputSurfaceMode = if (ENABLE_EGL_CAMERA_INPUT_SURFACE || ENABLE_EGL_FANOUT_DEBUG) {
                             CameraInputSurfaceMode.EGL
                         } else {
                             CameraInputSurfaceMode.DEFAULT

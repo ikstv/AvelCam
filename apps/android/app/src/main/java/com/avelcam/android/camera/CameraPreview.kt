@@ -32,11 +32,14 @@ import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntime
 import com.avelcam.android.camera.pipeline.CameraGlFanoutRuntimeConfig
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputRole
 import com.avelcam.android.camera.pipeline.CameraGlFanoutOutputSpec
+import com.avelcam.android.camera.pipeline.DebugFanoutTelemetry
 import com.avelcam.android.camera.pipeline.EncoderSurfaceGlDestination
+import com.avelcam.android.camera.pipeline.NoopEncodedFrameSink
 import com.avelcam.android.camera.pipeline.PreviewSurfaceGlDestination
 import com.avelcam.android.camera.pipeline.asContract
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurface
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceMode
+import com.avelcam.android.BuildConfig
 import com.avelcam.android.camera.pipeline.surface.CameraInputSurfaceFactoryOwner
 import com.avelcam.android.camera.pipeline.surface.CameraSurfaceProvider
 import com.avelcam.android.encoder.gl.EglInputSurface
@@ -61,9 +64,14 @@ internal fun CameraPreview(
             EglInputSurface(surface)
         }
     }
-    val runtime = remember(destinationSurfaceFactory) {
+    val runtime = remember(selectedLens, effectiveCameraInputSurfaceMode, destinationSurfaceFactory) {
         CameraGlFanoutRuntime(
             controller = CameraGlFanoutController(
+                outputSink = if (BuildConfig.ENABLE_EGL_FANOUT_DEBUG) {
+                    DebugFanoutTelemetry
+                } else {
+                    NoopEncodedFrameSink()
+                },
                 outputManagerFactory = { coordinator, config, sink, _ ->
                     CameraEncoderOutputManager(
                         encoderConfig = config,
@@ -94,6 +102,12 @@ internal fun CameraPreview(
 
     DisposableEffect(selectedLens, lifecycleOwner, effectiveCameraInputSurfaceMode) {
         var disposed = false
+        val debugFanoutPreview = if (BuildConfig.ENABLE_EGL_FANOUT_DEBUG) {
+            DebugFanoutTelemetry.reset()
+            DebugFanoutPreviewSurface()
+        } else {
+            null
+        }
         val providerFuture = ProcessCameraProvider.getInstance(context)
         val mainExecutor = ContextCompat.getMainExecutor(context)
         val analysisExecutor = Executors.newSingleThreadExecutor()
@@ -120,7 +134,7 @@ internal fun CameraPreview(
                     analysisExecutor = analysisExecutor,
                     previewDestination = previewDestination,
                     frameBridge = frameBridge,
-                    previewSurface = null,
+                    previewSurface = debugFanoutPreview?.surface,
                     previewView = previewView,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
                     onSurfaceFactoryOwnerCreated = { owner ->
@@ -136,6 +150,7 @@ internal fun CameraPreview(
                     onSurfaceProviderCreated = { provider ->
                         surfaceProvider = provider
                     },
+                    suppressDisplayPreview = debugFanoutPreview != null,
                     cameraInputSurfaceMode = effectiveCameraInputSurfaceMode,
                     onRuntimeError = { message ->
                         if (
@@ -166,6 +181,7 @@ internal fun CameraPreview(
             frameAnalyzer?.release()
             frameAnalyzer = null
             previewDestination.release(runtime)
+            debugFanoutPreview?.close()
             val provider = surfaceProvider
             if (provider != null) {
                 provider.release {
@@ -180,6 +196,7 @@ internal fun CameraPreview(
             }
             surfaceProvider = null
             runtime.release()
+            DebugFanoutTelemetry.logSummary("camera preview disposed")
             if (providerFuture.isDone) {
                 try {
                     providerFuture.get().unbindAll()
@@ -204,6 +221,7 @@ private fun bindPreview(
     previewView: PreviewView,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
     onSurfaceProviderCreated: (CameraSurfaceProvider) -> Unit,
+    suppressDisplayPreview: Boolean,
     cameraInputSurfaceMode: CameraInputSurfaceMode,
     onSurfaceFactoryOwnerCreated: (CameraInputSurfaceFactoryOwner) -> Unit,
     onRuntimeError: (String) -> Unit,
@@ -259,8 +277,12 @@ private fun bindPreview(
         val fanoutPreview = androidx.camera.core.Preview.Builder().build().also {
             it.setSurfaceProvider(surfaceProvider)
         }
-        val displayPreview = androidx.camera.core.Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
+        val displayPreview = if (suppressDisplayPreview) {
+            null
+        } else {
+            androidx.camera.core.Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
         }
 
         surfaceFactory.setListener { surface ->
@@ -288,13 +310,12 @@ private fun bindPreview(
             }
 
         provider.unbindAll()
-        provider.bindToLifecycle(
-            lifecycleOwner,
-            selector,
-            fanoutPreview,
-            displayPreview,
-            imageAnalysis,
-        )
+        val useCases = buildList {
+            add(fanoutPreview)
+            displayPreview?.let(::add)
+            add(imageAnalysis)
+        }.toTypedArray()
+        provider.bindToLifecycle(lifecycleOwner, selector, *useCases)
         onError(null)
     } catch (error: Exception) {
         onError(error.localizedMessage ?: "Failed to initialize camera preview.")
@@ -450,10 +471,11 @@ private class FanoutSurfaceFrameBridge(
             activeSourceTextureId = surface.sourceTextureId
             lastSourceWidth = surface.resolution.width
             lastSourceHeight = surface.resolution.height
-            activeSurfaceTexture?.setOnFrameAvailableListener {
-                Log.d("AvelCamCamera", "input SurfaceTexture frame available")
+            val frameHandler = eglContextProvider()?.frameHandler()
+            activeSurfaceTexture?.setOnFrameAvailableListener({
+                DebugFanoutTelemetry.onSurfaceTextureCallback()
                 frameCoalescer.onFrameAvailable()
-            }
+            }, frameHandler)
         }
     }
 
@@ -493,6 +515,7 @@ private class FanoutSurfaceFrameBridge(
             val updateSurfaceTexture = {
                 texture.updateTexImage()
                 texture.getTransformMatrix(nextTransform)
+                DebugFanoutTelemetry.onSurfaceTextureUpdated()
             }
             eglContextProvider()?.runWithContext(updateSurfaceTexture) ?: updateSurfaceTexture()
             synchronized(lock) {

@@ -5,6 +5,7 @@ import android.opengl.GLES20
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import com.avelcam.android.encoder.gl.GlShaderProgram
 
 private const val POSITION_COMPONENT_SIZE = 2
 private const val TEXTURE_COMPONENT_SIZE = 2
@@ -39,7 +40,7 @@ private val FRAGMENT_SHADER = """
 """.trimIndent()
 
 internal class PreviewGlRenderer : AutoCloseable {
-    private var program = 0
+    private var program: GlShaderProgram? = null
     private var aPosition = -1
     private var aTexCoord = -1
     private var uTextureMatrix = -1
@@ -54,11 +55,11 @@ internal class PreviewGlRenderer : AutoCloseable {
         }
 
     init {
-        program = createProgram(VERTEX_SHADER, FRAGMENT_SHADER)
-        aPosition = GLES20.glGetAttribLocation(program, "aPosition")
-        aTexCoord = GLES20.glGetAttribLocation(program, "aTexCoord")
-        uTextureMatrix = GLES20.glGetUniformLocation(program, "uTextureMatrix")
-        uTextureSampler = GLES20.glGetUniformLocation(program, "uTexture")
+        program = GlShaderProgram(VERTEX_SHADER, FRAGMENT_SHADER)
+        aPosition = program!!.getAttributeLocation("aPosition")
+        aTexCoord = program!!.getAttributeLocation("aTexCoord")
+        uTextureMatrix = program!!.getUniformLocation("uTextureMatrix")
+        uTextureSampler = program!!.getUniformLocation("uTexture")
         if (aPosition < 0 || aTexCoord < 0 || uTextureMatrix < 0 || uTextureSampler < 0) {
             throw IllegalStateException("Failed to resolve OES shader attributes/uniforms.")
         }
@@ -70,7 +71,7 @@ internal class PreviewGlRenderer : AutoCloseable {
         }
 
         GLES20.glViewport(0, 0, width, height)
-        GLES20.glUseProgram(program)
+        program!!.useProgram()
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
@@ -113,22 +114,8 @@ internal class PreviewGlRenderer : AutoCloseable {
         return true
     }
 
-    private fun createProgram(vertexSource: String, fragmentSource: String): Int {
-        val vertexShader = com.avelcam.android.encoder.gl.GlShaderProgram(vertexSource, fragmentSource)
-        return try {
-            val field = vertexShader.javaClass.getDeclaredField("program")
-            field.isAccessible = true
-            field.getInt(vertexShader)
-        } catch (error: Throwable) {
-            vertexShader.close()
-            throw IllegalStateException("Failed to create OES preview program.", error)
-        }
-    }
-
     override fun close() {
-        if (program != 0) {
-            GLES20.glDeleteProgram(program)
-            program = 0
-        }
+        program?.close()
+        program = null
     }
 }

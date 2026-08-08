@@ -22,6 +22,10 @@ class GlShaderProgram(
             GLES20.glDeleteProgram(program)
             throw IllegalStateException("Failed to link shader program: $log")
         }
+        GLES20.glDetachShader(program, vert)
+        GLES20.glDetachShader(program, frag)
+        GLES20.glDeleteShader(vert)
+        GLES20.glDeleteShader(frag)
     }
 
     private fun compileShader(type: Int, source: String): Int {

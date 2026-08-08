@@ -23,6 +23,10 @@ class EncoderSurfaceGlDestination(
     private val isReleased = AtomicBoolean(false)
 
     override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
+        return eglSurface.runOnEglThread { renderOnEglThread(frame) }
+    }
+
+    private fun renderOnEglThread(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
         if (isReleased.get()) {
             return CameraGlFanoutRenderResult(
                 role = spec.role,
@@ -41,6 +45,7 @@ class EncoderSurfaceGlDestination(
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
 
             val accepted = eglSurface.swapBuffers(frame.presentationTimestampNs)
+            if (accepted) DebugFanoutTelemetry.onEncoderRendered()
             CameraGlFanoutRenderResult(
                 role = spec.role,
                 rendered = accepted,

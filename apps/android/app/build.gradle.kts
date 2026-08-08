@@ -10,6 +10,10 @@ android {
 .orElse("false")
         .get()
         .toBoolean()
+    val enableEglFanoutDebug = providers.gradleProperty("avelcamEnableEglFanoutDebug")
+        .orElse("false")
+        .get()
+        .toBoolean()
 
     defaultConfig {
         applicationId = "com.avelcam.android"
@@ -20,11 +24,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ENABLE_EGL_CAMERA_INPUT_SURFACE", enableEglInputSurface.toString())
+        buildConfigField("boolean", "ENABLE_EGL_FANOUT_DEBUG", enableEglFanoutDebug.toString())
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            buildConfigField("boolean", "ENABLE_EGL_FANOUT_DEBUG", "false")
         }
     }
 

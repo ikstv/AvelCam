@@ -6,6 +6,7 @@ import android.view.Surface
 
 internal class EglCameraInputSurfaceFactory(
     private val externalTextureFactory: () -> ExternalOesTexture = { ExternalOesTexture.create() },
+    private val glDispatch: ((() -> Any?) -> Any?)? = null,
 ) : CameraInputSurfaceFactory {
     override fun create(resolution: CameraSurfaceRequestResolution): CameraInputSurface {
         if (resolution.width <= 0 || resolution.height <= 0) {
@@ -24,18 +25,22 @@ internal class EglCameraInputSurfaceFactory(
         }
 
         return try {
-            val surfaceTexture = SurfaceTexture(externalTexture.textureId)
-            surfaceTexture.setDefaultBufferSize(resolution.width, resolution.height)
-            val surface = Surface(surfaceTexture)
+            val resources = dispatch {
+                val surfaceTexture = SurfaceTexture(externalTexture.textureId)
+                surfaceTexture.setDefaultBufferSize(resolution.width, resolution.height)
+                surfaceTexture to Surface(surfaceTexture)
+            }
+            val surfaceTexture = resources.first
+            val surface = resources.second
             CameraInputSurface(
                 resolution = Size(resolution.width, resolution.height),
                 surfaceTexture = surfaceTexture,
                 sourceTextureId = externalTexture.textureId,
                 surface = AndroidSurfaceRequestToken(surface),
-                onRelease = { externalTexture.close() },
+                onRelease = { dispatch { externalTexture.close() } },
             )
         } catch (error: Throwable) {
-            externalTexture.close()
+            dispatch { externalTexture.close() }
             throw CameraInputSurfaceFailure.AllocationFailure(
                 width = resolution.width,
                 height = resolution.height,
@@ -43,5 +48,11 @@ internal class EglCameraInputSurfaceFactory(
                 failure = error,
             )
         }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> dispatch(block: () -> T): T {
+        val dispatcher = glDispatch ?: return block()
+        return dispatcher(block as () -> Any?) as T
     }
 }

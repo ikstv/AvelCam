@@ -23,6 +23,10 @@ class PreviewSurfaceGlDestination(
     private val isReleased = AtomicBoolean(false)
 
     override fun render(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
+        return eglSurface.runOnEglThread { renderOnEglThread(frame) }
+    }
+
+    private fun renderOnEglThread(frame: CameraGlFanoutFrame): CameraGlFanoutRenderResult {
         if (isReleased.get()) {
             return CameraGlFanoutRenderResult(
                 role = spec.role,
@@ -58,6 +62,7 @@ class PreviewSurfaceGlDestination(
                 GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
             }
             val accepted = eglSurface.swapBuffers(frame.presentationTimestampNs)
+            if (accepted) DebugFanoutTelemetry.onPreviewRendered()
             CameraGlFanoutRenderResult(
                 role = spec.role,
                 rendered = accepted,
@@ -82,9 +87,11 @@ class PreviewSurfaceGlDestination(
         if (!isReleased.compareAndSet(false, true)) {
             return
         }
-        eglSurface.close()
-        previewRenderer?.close()
-        previewRenderer = null
+        eglSurface.runOnEglThread {
+            previewRenderer?.close()
+            previewRenderer = null
+            eglSurface.close()
+        }
     }
 
     private fun ensureRenderer(): PreviewGlRenderer {
