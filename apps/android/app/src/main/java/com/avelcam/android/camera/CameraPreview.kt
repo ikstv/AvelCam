@@ -4,11 +4,12 @@ import android.content.Context
 import android.graphics.SurfaceTexture
 import android.util.Log
 import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -58,13 +59,35 @@ internal fun CameraPreview(
     val lifecycleOwner = LocalLifecycleOwner.current
     var effectiveCameraInputSurfaceMode by remember { mutableStateOf(cameraInputSurfaceMode) }
     var fallbackScheduled by remember { mutableStateOf(false) }
-    val previewView = remember { PreviewView(context) }
+    var previewOutputSurface by remember { mutableStateOf<Surface?>(null) }
+    val previewOutputView = remember {
+        SurfaceView(context).also { view ->
+            view.holder.addCallback(object : SurfaceHolder.Callback {
+                override fun surfaceCreated(holder: SurfaceHolder) {
+                    previewOutputSurface = holder.surface
+                }
+
+                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+
+                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                    if (previewOutputSurface === holder.surface) {
+                        previewOutputSurface = null
+                    }
+                }
+            })
+        }
+    }
     val destinationSurfaceFactory = remember {
         AtomicReference<(Surface) -> EglInputSurface> { surface ->
             EglInputSurface(surface)
         }
     }
-    val runtime = remember(selectedLens, effectiveCameraInputSurfaceMode, destinationSurfaceFactory) {
+    val runtime = remember(
+        selectedLens,
+        effectiveCameraInputSurfaceMode,
+        destinationSurfaceFactory,
+        previewOutputSurface,
+    ) {
         CameraGlFanoutRuntime(
             controller = CameraGlFanoutController(
                 outputSink = if (BuildConfig.ENABLE_EGL_FANOUT_DEBUG) {
@@ -98,9 +121,9 @@ internal fun CameraPreview(
         fallbackScheduled = false
     }
 
-    AndroidView(modifier = Modifier.fillMaxSize(), factory = { previewView })
+    AndroidView(modifier = Modifier.fillMaxSize(), factory = { previewOutputView })
 
-    DisposableEffect(selectedLens, lifecycleOwner, effectiveCameraInputSurfaceMode) {
+    DisposableEffect(selectedLens, lifecycleOwner, effectiveCameraInputSurfaceMode, previewOutputSurface) {
         var disposed = false
         val debugFanoutPreview = if (BuildConfig.ENABLE_EGL_FANOUT_DEBUG) {
             DebugFanoutTelemetry.reset()
@@ -134,8 +157,7 @@ internal fun CameraPreview(
                     analysisExecutor = analysisExecutor,
                     previewDestination = previewDestination,
                     frameBridge = frameBridge,
-                    previewSurface = debugFanoutPreview?.surface,
-                    previewView = previewView,
+                    previewSurface = debugFanoutPreview?.surface ?: previewOutputSurface,
                     onAnalyzerCreated = { analyzer -> frameAnalyzer = analyzer },
                     onSurfaceFactoryOwnerCreated = { owner ->
                         surfaceFactoryOwner = owner
@@ -150,7 +172,6 @@ internal fun CameraPreview(
                     onSurfaceProviderCreated = { provider ->
                         surfaceProvider = provider
                     },
-                    suppressDisplayPreview = debugFanoutPreview != null,
                     cameraInputSurfaceMode = effectiveCameraInputSurfaceMode,
                     onRuntimeError = { message ->
                         if (
@@ -218,10 +239,8 @@ private fun bindPreview(
     previewDestination: FanoutPreviewDestinationRegistry,
     frameBridge: FanoutSurfaceFrameBridge,
     previewSurface: Surface?,
-    previewView: PreviewView,
     onAnalyzerCreated: (FanoutFrameAnalyzer) -> Unit,
     onSurfaceProviderCreated: (CameraSurfaceProvider) -> Unit,
-    suppressDisplayPreview: Boolean,
     cameraInputSurfaceMode: CameraInputSurfaceMode,
     onSurfaceFactoryOwnerCreated: (CameraInputSurfaceFactoryOwner) -> Unit,
     onRuntimeError: (String) -> Unit,
@@ -277,14 +296,6 @@ private fun bindPreview(
         val fanoutPreview = androidx.camera.core.Preview.Builder().build().also {
             it.setSurfaceProvider(surfaceProvider)
         }
-        val displayPreview = if (suppressDisplayPreview) {
-            null
-        } else {
-            androidx.camera.core.Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
-        }
-
         surfaceFactory.setListener { surface ->
             frameBridge.bindSurface(surface, selectedLens == CameraSelector.LENS_FACING_FRONT)
             frameBridge.start()
@@ -310,10 +321,11 @@ private fun bindPreview(
             }
 
         provider.unbindAll()
-        val useCases = buildList {
-            add(fanoutPreview)
-            displayPreview?.let(::add)
-            add(imageAnalysis)
+        val useCases = fanoutCameraUseCaseRoles().map { role ->
+            when (role) {
+                CameraUseCaseRole.FANOUT_PREVIEW -> fanoutPreview
+                CameraUseCaseRole.IMAGE_ANALYSIS -> imageAnalysis
+            }
         }.toTypedArray()
         provider.bindToLifecycle(lifecycleOwner, selector, *useCases)
         onError(null)
